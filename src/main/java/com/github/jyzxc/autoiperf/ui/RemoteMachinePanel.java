@@ -2,16 +2,22 @@ package com.github.jyzxc.autoiperf.ui;
 
 import com.github.jyzxc.autoiperf.service.NetworkService;
 import com.github.jyzxc.autoiperf.sshtool.SshService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.List;
 
 /**
  * A reusable panel for configuring a single remote test machine (either client or server role).
  */
 public class RemoteMachinePanel extends JPanel {
+
+    private static final Logger log = LoggerFactory.getLogger(RemoteMachinePanel.class);
 
     private final SshService sshService;
     private final NetworkService networkService;
@@ -93,10 +99,13 @@ public class RemoteMachinePanel extends JPanel {
         String username = usernameField.getText();
         String password = new String(passwordField.getPassword());
         
+        log.info("Connect button clicked for host: {}", host);
+
         // Use a background thread for network operations to avoid freezing the GUI
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() throws Exception {
+                log.debug("SwingWorker started for SSH connection.");
                 sshService.connect(username, password, host, 22);
                 return networkService.getRemoteIpAddresses();
             }
@@ -105,6 +114,7 @@ public class RemoteMachinePanel extends JPanel {
             protected void done() {
                 try {
                     List<String> ips = get();
+                    log.info("Successfully fetched IPs: {}", ips);
                     nicComboBox.removeAllItems();
                     if (ips.isEmpty()) {
                         nicComboBox.addItem("未找到可用IP");
@@ -115,10 +125,25 @@ public class RemoteMachinePanel extends JPanel {
                     setInputsEnabled(false);
                     JOptionPane.showMessageDialog(RemoteMachinePanel.this, "连接成功！", "成功", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
+                    log.error("Failed to connect or fetch IPs for host: {}", host, e);
                     nicComboBox.removeAllItems();
                     nicComboBox.addItem("连接失败");
                     nicComboBox.setEnabled(false);
-                    JOptionPane.showMessageDialog(RemoteMachinePanel.this, "连接失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    
+                    // Create a detailed and scrollable error message dialog
+                    StringWriter sw = new StringWriter();
+                    e.printStackTrace(new PrintWriter(sw));
+                    String exceptionAsString = sw.toString();
+
+                    JTextArea textArea = new JTextArea(exceptionAsString);
+                    textArea.setEditable(false);
+                    textArea.setLineWrap(true);
+                    textArea.setWrapStyleWord(true);
+
+                    JScrollPane scrollPane = new JScrollPane(textArea);
+                    scrollPane.setPreferredSize(new Dimension(600, 400)); // Make dialog larger
+
+                    JOptionPane.showMessageDialog(RemoteMachinePanel.this, scrollPane, "连接失败", JOptionPane.ERROR_MESSAGE);
                 }
             }
         }.execute();
@@ -129,8 +154,9 @@ public class RemoteMachinePanel extends JPanel {
         usernameField.setEnabled(enabled);
         passwordField.setEnabled(enabled);
         connectButton.setEnabled(enabled);
-        saveButton.setEnabled(enabled);
-        deleteButton.setEnabled(enabled);
-        profileComboBox.setEnabled(enabled);
+        // Keep save/delete enabled for profile management
+        // saveButton.setEnabled(enabled);
+        // deleteButton.setEnabled(enabled);
+        // profileComboBox.setEnabled(enabled);
     }
 }
