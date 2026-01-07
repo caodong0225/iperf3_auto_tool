@@ -5,6 +5,7 @@ import com.github.jyzxc.autoiperf.service.EnvironmentService;
 import com.github.jyzxc.autoiperf.service.NetworkService;
 import com.github.jyzxc.autoiperf.service.ProfileService;
 import com.github.jyzxc.autoiperf.sshtool.SshService;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,6 +24,7 @@ public class RemoteMachinePanel extends JPanel {
     private static final String NEW_CONNECTION_ITEM = "新建连接...";
 
     // Services
+    @Getter
     private final SshService sshService;
     private final ProfileService profileService;
     private final NetworkService networkService;
@@ -30,6 +32,7 @@ public class RemoteMachinePanel extends JPanel {
 
     // UI Components
     private JComboBox<Object> profileComboBox;
+    @Getter
     private JTextField hostField;
     private JTextField usernameField;
     private JPasswordField passwordField;

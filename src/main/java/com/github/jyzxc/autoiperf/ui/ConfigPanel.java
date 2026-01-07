@@ -1,5 +1,7 @@
 package com.github.jyzxc.autoiperf.ui;
 
+import lombok.Getter;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -10,9 +12,15 @@ import java.awt.*;
  */
 public class ConfigPanel extends JPanel {
 
+    @Getter
     private RemoteMachinePanel clientMachinePanel;
+    @Getter
     private RemoteMachinePanel serverMachinePanel;
+    @Getter
+    private TestParametersPanel testParametersPanel; // Added field
+    @Getter
     private JButton testConnectivityButton;
+    @Getter
     private JButton startTestButton;
 
     public ConfigPanel() {
@@ -31,7 +39,8 @@ public class ConfigPanel extends JPanel {
 
         // Container for parameters and the main action button
         JPanel bottomPanel = new JPanel(new BorderLayout(5,5));
-        bottomPanel.add(new TestParametersPanel(), BorderLayout.CENTER);
+        testParametersPanel = new TestParametersPanel(); // Instantiate and assign to field
+        bottomPanel.add(testParametersPanel, BorderLayout.CENTER);
 
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5));
         testConnectivityButton = new JButton("测试连通性");
@@ -47,19 +56,4 @@ public class ConfigPanel extends JPanel {
         add(bottomPanel, BorderLayout.SOUTH);
     }
 
-    public RemoteMachinePanel getClientMachinePanel() {
-        return clientMachinePanel;
-    }
-
-    public RemoteMachinePanel getServerMachinePanel() {
-        return serverMachinePanel;
-    }
-
-    public JButton getTestConnectivityButton() {
-        return testConnectivityButton;
-    }
-
-    public JButton getStartTestButton() {
-        return startTestButton;
-    }
 }

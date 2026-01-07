@@ -5,6 +5,7 @@ import com.github.jyzxc.autoiperf.model.TestConfig;
 import com.github.jyzxc.autoiperf.model.TestResult;
 import com.github.jyzxc.autoiperf.service.ResultPersistenceService;
 import com.github.jyzxc.autoiperf.service.TestExecutionService;
+import com.github.jyzxc.autoiperf.model.PortInUseByIperfException;
 import com.github.jyzxc.autoiperf.ui.ConfigPanel;
 import com.github.jyzxc.autoiperf.ui.MainFrame;
 import com.github.jyzxc.autoiperf.ui.RemoteMachinePanel;
@@ -63,9 +64,11 @@ public class MainController {
     
     private void handleStartTest() {
         log.info("'Start Test' button clicked.");
-        
+
         TestConfig config = buildTestConfig();
-        if (config == null) return;
+        if (config == null) {
+            return;
+        }
 
         setAllInputsEnabled(false);
         mainFrame.getStatusBar().setStatus("测试正在进行中...");
@@ -75,47 +78,83 @@ public class MainController {
         new SwingWorker<TestResult, Void>() {
             @Override
             protected TestResult doInBackground() throws Exception {
-                String serverContext = null;
-                IperfResult clientResult = null;
-                IperfResult serverResult = null;
-                boolean success = false;
-                String errorMessage = null;
+                boolean testSuccess = false;
+                int maxRetries = 1; 
+                int attempt = 0;
+                String finalErrorMessage = "测试因未知原因失败。";
+                TestResult testResult = null;
 
-                try {
-                    // 1. Start server
-                    serverContext = testExecutionService.startServer(serverMachinePanel.getSshService(), config);
-                    String[] contextParts = serverContext.split(";");
-                    String serverTempFile = contextParts[0];
-                    String serverPid = contextParts[1];
-                    
-                    // 2. Execute client
-                    clientResult = testExecutionService.executeClient(clientMachinePanel.getSshService(), config);
+                while (attempt <= maxRetries && !testSuccess) {
+                    attempt++;
+                    String serverContext = null;
 
-                    // 3. Collect server result
-                    serverResult = testExecutionService.collectServerResult(serverMachinePanel.getSshService(), serverTempFile);
-
-                    // 4. Cleanup
-                    testExecutionService.cleanupServer(serverMachinePanel.getSshService(), serverTempFile, serverPid);
-                    success = true;
-                } catch (Exception e) {
-                    log.error("Test execution failed.", e);
-                    errorMessage = e.getMessage();
-                    // Attempt cleanup even on failure
-                    if (serverContext != null) {
+                    try {
+                        serverContext = testExecutionService.startServer(serverMachinePanel.getSshService(), config);
                         String[] contextParts = serverContext.split(";");
-                        testExecutionService.cleanupServer(serverMachinePanel.getSshService(), contextParts[0], contextParts[1]);
+                        String serverTempFile = contextParts[0];
+                        String serverPid = contextParts[1];
+
+                        IperfResult clientResult = testExecutionService.executeClient(clientMachinePanel.getSshService(), config);
+                        IperfResult serverResult = testExecutionService.collectServerResult(serverMachinePanel.getSshService(), serverTempFile);
+                        testExecutionService.cleanupServer(serverMachinePanel.getSshService(), serverTempFile, serverPid);
+
+                        testResult = TestResult.builder()
+                                .testId(UUID.randomUUID().toString())
+                                .testTimestamp(ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                                .configuration(config)
+                                .clientResult(clientResult)
+                                .serverResult(serverResult)
+                                .success(true)
+                                .errorMessage(null)
+                                .build();
+                        testSuccess = true;
+
+                    } catch (PortInUseByIperfException e) {
+                        log.warn("Caught iperf conflict: {}", e.getMessage());
+                        finalErrorMessage = e.getMessage();
+                        
+                        final int[] choice = new int[1];
+                        try {
+                            SwingUtilities.invokeAndWait(() -> choice[0] = JOptionPane.showConfirmDialog(mainFrame,
+                                    e.getMessage() + "\n是否终止该进程并重试?",
+                                    "端口已被占用",
+                                    JOptionPane.YES_NO_OPTION,
+                                    JOptionPane.WARNING_MESSAGE));
+                        } catch (Exception swingEx) {
+                            log.error("Failed to show user confirmation dialog.", swingEx);
+                            break; 
+                        }
+
+                        if (choice[0] == JOptionPane.YES_OPTION) {
+                            log.info("User chose to kill existing process with PID {}.", e.getPid());
+                            testExecutionService.killProcessByPid(serverMachinePanel.getSshService(), e.getPid());
+                            mainFrame.getStatusBar().setStatus("已终止旧进程，正在重试...");
+                            Thread.sleep(500);
+                        } else {
+                            log.info("User chose not to kill the existing process.");
+                            break; 
+                        }
+                    } catch (Exception e) {
+                        log.error("Test execution failed.", e);
+                        finalErrorMessage = e.getMessage();
+                        if (serverContext != null) {
+                            String[] contextParts = serverContext.split(";");
+                            testExecutionService.cleanupServer(serverMachinePanel.getSshService(), contextParts[0], contextParts[1]);
+                        }
+                        break;
                     }
                 }
 
-                return TestResult.builder()
-                        .testId(UUID.randomUUID().toString())
-                        .testTimestamp(ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
-                        .configuration(config)
-                        .clientResult(clientResult)
-                        .serverResult(serverResult)
-                        .success(success)
-                        .errorMessage(errorMessage)
-                        .build();
+                if (!testSuccess) {
+                    return TestResult.builder()
+                            .testId(UUID.randomUUID().toString())
+                            .testTimestamp(ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                            .configuration(config)
+                            .success(false)
+                            .errorMessage(finalErrorMessage)
+                            .build();
+                }
+                return testResult;
             }
 
             @Override
@@ -124,14 +163,14 @@ public class MainController {
                     TestResult finalResult = get();
                     displayResults(finalResult);
                     resultPersistenceService.saveResult(finalResult);
-                    mainFrame.getStatusBar().setStatus("测试完成。");
+                    mainFrame.getStatusBar().setStatus(finalResult.isSuccess() ? "测试完成。" : "测试失败。");
                 } catch (Exception e) {
                     log.error("An unexpected error occurred in the test worker's done() method.", e);
                     mainFrame.getResultsPanel().setClientResultText("测试执行期间发生意外错误:\n" + e.getMessage());
                     mainFrame.getStatusBar().setStatus("测试失败。");
                 } finally {
                     setAllInputsEnabled(true);
-                    startTestButton.setEnabled(false); // Force re-test of connectivity
+                    startTestButton.setEnabled(false); 
                 }
             }
         }.execute();
@@ -162,8 +201,8 @@ public class MainController {
     private TestConfig buildTestConfig() {
         try {
             return TestConfig.builder()
-                .clientHost(clientMachinePanel.getHost())
-                .serverHost(serverMachinePanel.getHost())
+                .clientHost(String.valueOf(clientMachinePanel.getHostField()))
+                .serverHost(serverMachinePanel.getHostField().getText())
                 .clientBindAddress(clientMachinePanel.getSelectedNicIp())
                 .serverBindAddress(serverMachinePanel.getSelectedNicIp())
                 .testPort((Integer) testParametersPanel.getPortSpinner().getValue())

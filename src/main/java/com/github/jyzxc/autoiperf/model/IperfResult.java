@@ -12,6 +12,7 @@ import java.util.List;
 @Data
 public class IperfResult {
 
+    private String error;
     private Start start;
     private End end;
 

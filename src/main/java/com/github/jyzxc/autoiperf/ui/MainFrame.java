@@ -1,6 +1,7 @@
 package com.github.jyzxc.autoiperf.ui;
 
 import com.github.jyzxc.autoiperf.controller.MainController;
+import lombok.Getter;
 
 import javax.swing.*;
 import java.awt.*;
@@ -8,8 +9,11 @@ import java.awt.*;
 public class MainFrame extends JFrame {
 
     private MainController mainController;
+    @Getter
     private ConfigPanel configPanel;
+    @Getter
     private ResultsPanel resultsPanel;
+    @Getter
     private StatusBar statusBar;
 
     public MainFrame() {
@@ -53,15 +57,4 @@ public class MainFrame extends JFrame {
         return menuBar;
     }
 
-    public ConfigPanel getConfigPanel() {
-        return configPanel;
-    }
-
-    public ResultsPanel getResultsPanel() {
-        return resultsPanel;
-    }
-
-    public StatusBar getStatusBar() {
-        return statusBar;
-    }
 }
