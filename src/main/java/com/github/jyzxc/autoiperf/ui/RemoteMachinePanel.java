@@ -1,6 +1,7 @@
 package com.github.jyzxc.autoiperf.ui;
 
 import com.github.jyzxc.autoiperf.model.SshProfile;
+import com.github.jyzxc.autoiperf.service.EnvironmentService;
 import com.github.jyzxc.autoiperf.service.NetworkService;
 import com.github.jyzxc.autoiperf.service.ProfileService;
 import com.github.jyzxc.autoiperf.sshtool.SshService;
@@ -23,6 +24,7 @@ public class RemoteMachinePanel extends JPanel {
     private final SshService sshService;
     private final ProfileService profileService;
     private final NetworkService networkService;
+    private final EnvironmentService environmentService;
 
     // UI Components
     private JComboBox<Object> profileComboBox;
@@ -40,6 +42,7 @@ public class RemoteMachinePanel extends JPanel {
         this.sshService = new SshService();
         this.profileService = new ProfileService();
         this.networkService = new NetworkService(sshService);
+        this.environmentService = new EnvironmentService(sshService);
 
         setBorder(new TitledBorder(title));
         setLayout(new GridBagLayout());
@@ -138,7 +141,7 @@ public class RemoteMachinePanel extends JPanel {
             SshProfile profile = new SshProfile(profileName.trim(), hostField.getText(), usernameField.getText(), new String(passwordField.getPassword()));
             profileService.saveProfile(profile);
             loadProfilesIntoComboBox();
-            profileComboBox.setSelectedItem(profile); // This doesn't work directly due to object inequality, would need custom model or equals/hashCode
+            // This is tricky, so we just reload. A better implementation would use a custom model.
             JOptionPane.showMessageDialog(this, "配置已保存！");
         }
     }
@@ -158,7 +161,6 @@ public class RemoteMachinePanel extends JPanel {
     }
 
     private void handleConnection() {
-        // ... (same as before)
         String host = hostField.getText();
         String username = usernameField.getText();
         String password = new String(passwordField.getPassword());
@@ -169,7 +171,16 @@ public class RemoteMachinePanel extends JPanel {
             @Override
             protected List<String> doInBackground() throws Exception {
                 log.debug("SwingWorker started for SSH connection.");
+                // 1. Connect
                 sshService.connect(username, password, host, 22);
+
+                // 2. Check for iperf3
+                if (!environmentService.checkIperf3Exists(password)) {
+                    sshService.disconnect(); // Clean up connection
+                    throw new RuntimeException("iPerf3 not found on the remote host.\nPlease ensure 'iperf3' is installed and in the user's PATH, or that the user has sudo rights.");
+                }
+
+                // 3. Get IPs if check is successful
                 return networkService.getRemoteIpAddresses();
             }
 
@@ -177,14 +188,16 @@ public class RemoteMachinePanel extends JPanel {
             protected void done() {
                 try {
                     List<String> ips = get();
-                    log.info("Successfully fetched IPs: {}", ips);
+                    log.info("Successfully connected and found IPs: {}", ips);
                     nicComboBox.removeAllItems();
                     if (ips.isEmpty()) { nicComboBox.addItem("未找到可用IP"); } else { ips.forEach(nicComboBox::addItem); }
                     nicComboBox.setEnabled(true);
                     setInputsEnabled(false);
+                    // No need for a popup on success, the UI state change is enough feedback.
                 } catch (Exception e) {
-                    log.error("Failed to connect or fetch IPs for host: {}", host, e);
+                    log.error("Failed to connect or complete setup for host: {}", host, e);
                     nicComboBox.removeAllItems(); nicComboBox.addItem("连接失败"); nicComboBox.setEnabled(false);
+                    sshService.disconnect(); // Ensure disconnection on failure
                     showDetailedErrorDialog(e);
                 }
             }
@@ -226,6 +239,6 @@ public class RemoteMachinePanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(textArea);
         scrollPane.setPreferredSize(new Dimension(600, 400));
-        JOptionPane.showMessageDialog(this, scrollPane, "连接失败", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, scrollPane, "操作失败", JOptionPane.ERROR_MESSAGE);
     }
 }

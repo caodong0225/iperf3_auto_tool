@@ -76,6 +76,65 @@ public class SshService {
         }
     }
 
+    public String executeSudoCommand(String command, String password) throws JSchException {
+        if (session == null || !session.isConnected()) {
+            log.error("Cannot execute sudo command. Session is not connected.");
+            throw new JSchException("Session is not connected.");
+        }
+
+        // -S: read password from stdin, -p '': suppress sudo's own password prompt
+        String sudoCommand = "sudo -S -p '' " + command;
+        log.debug("Executing remote sudo command...");
+
+        ChannelExec channel = null;
+        try {
+            channel = (ChannelExec) session.openChannel("exec");
+            channel.setCommand(sudoCommand);
+
+            ByteArrayOutputStream outputBuffer = new ByteArrayOutputStream();
+            ByteArrayOutputStream errorBuffer = new ByteArrayOutputStream();
+            channel.setOutputStream(outputBuffer);
+            channel.setErrStream(errorBuffer);
+
+            // Write password to the command's standard input
+            channel.setInputStream(new ByteArrayInputStream((password + "\n").getBytes()));
+
+            channel.connect();
+
+            while (!channel.isClosed()) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Sudo command execution was interrupted.", e);
+                    return "Sudo command execution interrupted.";
+                }
+            }
+            
+            String error = new String(errorBuffer.toByteArray());
+            String output = new String(outputBuffer.toByteArray());
+
+            // sudo itself might print to stderr on success (e.g., a warning), so we check the output first.
+            if (!output.trim().isEmpty()) {
+                log.debug("Sudo command output: {}", output);
+                return output;
+            }
+
+            if (!error.isEmpty()) {
+                log.error("Sudo command execution failed with error: {}", error);
+                // The error might contain "try again", so we don't return it directly as success
+                return ""; // Return empty to indicate failure
+            }
+
+            return output;
+
+        } finally {
+            if (channel != null) {
+                channel.disconnect();
+            }
+        }
+    }
+
     public void disconnect() {
         if (session != null && session.isConnected()) {
             log.info("Disconnecting SSH session from {}", session.getHost());
