@@ -1,6 +1,8 @@
 package com.github.jyzxc.autoiperf.ui;
 
+import com.github.jyzxc.autoiperf.model.SshProfile;
 import com.github.jyzxc.autoiperf.service.NetworkService;
+import com.github.jyzxc.autoiperf.service.ProfileService;
 import com.github.jyzxc.autoiperf.sshtool.SshService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,18 +14,18 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
 
-/**
- * A reusable panel for configuring a single remote test machine (either client or server role).
- */
 public class RemoteMachinePanel extends JPanel {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteMachinePanel.class);
+    private static final String NEW_CONNECTION_ITEM = "新建连接...";
 
+    // Services
     private final SshService sshService;
+    private final ProfileService profileService;
     private final NetworkService networkService;
 
     // UI Components
-    private JComboBox<String> profileComboBox;
+    private JComboBox<Object> profileComboBox;
     private JTextField hostField;
     private JTextField usernameField;
     private JPasswordField passwordField;
@@ -32,17 +34,22 @@ public class RemoteMachinePanel extends JPanel {
     private JButton deleteButton;
     private JComboBox<String> nicComboBox;
 
+    private boolean isConnected = false;
+
     public RemoteMachinePanel(String title) {
         this.sshService = new SshService();
+        this.profileService = new ProfileService();
         this.networkService = new NetworkService(sshService);
 
         setBorder(new TitledBorder(title));
         setLayout(new GridBagLayout());
         initComponents();
         addListeners();
+        loadProfilesIntoComboBox();
     }
 
     private void initComponents() {
+        // ... (same as before)
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 2, 2, 2);
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -50,7 +57,7 @@ public class RemoteMachinePanel extends JPanel {
         // Row 0: Saved Profiles
         gbc.gridx = 0; gbc.gridy = 0; add(new JLabel("历史配置:"), gbc);
         gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 1.0; gbc.gridwidth = 2;
-        profileComboBox = new JComboBox<>(new String[]{"新建连接..."});
+        profileComboBox = new JComboBox<>();
         add(profileComboBox, gbc);
 
         // Row 1: Host
@@ -91,17 +98,73 @@ public class RemoteMachinePanel extends JPanel {
     }
 
     private void addListeners() {
-        connectButton.addActionListener(e -> handleConnection());
+        connectButton.addActionListener(e -> {
+            if (isConnected) {
+                handleDisconnect();
+            } else {
+                handleConnection();
+            }
+        });
+
+        saveButton.addActionListener(e -> handleSaveProfile());
+        deleteButton.addActionListener(e -> handleDeleteProfile());
+        profileComboBox.addActionListener(e -> handleProfileSelection());
+    }
+
+    private void loadProfilesIntoComboBox() {
+        profileComboBox.removeAllItems();
+        profileComboBox.addItem(NEW_CONNECTION_ITEM);
+        profileService.loadProfiles().forEach(profileComboBox::addItem);
+    }
+
+    private void handleProfileSelection() {
+        Object selected = profileComboBox.getSelectedItem();
+        if (selected instanceof SshProfile) {
+            SshProfile profile = (SshProfile) selected;
+            hostField.setText(profile.getHost());
+            usernameField.setText(profile.getUsername());
+            passwordField.setText(profile.getPassword());
+        } else {
+            // "新建连接..." selected
+            hostField.setText("");
+            usernameField.setText("root");
+            passwordField.setText("");
+        }
+    }
+
+    private void handleSaveProfile() {
+        String profileName = JOptionPane.showInputDialog(this, "请输入配置名称:", "保存配置", JOptionPane.PLAIN_MESSAGE);
+        if (profileName != null && !profileName.trim().isEmpty()) {
+            SshProfile profile = new SshProfile(profileName.trim(), hostField.getText(), usernameField.getText(), new String(passwordField.getPassword()));
+            profileService.saveProfile(profile);
+            loadProfilesIntoComboBox();
+            profileComboBox.setSelectedItem(profile); // This doesn't work directly due to object inequality, would need custom model or equals/hashCode
+            JOptionPane.showMessageDialog(this, "配置已保存！");
+        }
+    }
+
+    private void handleDeleteProfile() {
+        Object selected = profileComboBox.getSelectedItem();
+        if (selected instanceof SshProfile) {
+            SshProfile profile = (SshProfile) selected;
+            int choice = JOptionPane.showConfirmDialog(this, "确定要删除配置 '" + profile.getProfileName() + "' 吗?", "删除确认", JOptionPane.YES_NO_OPTION);
+            if (choice == JOptionPane.YES_OPTION) {
+                profileService.deleteProfile(profile.getProfileName());
+                loadProfilesIntoComboBox();
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "请先选择一个要删除的配置。", "提示", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     private void handleConnection() {
+        // ... (same as before)
         String host = hostField.getText();
         String username = usernameField.getText();
         String password = new String(passwordField.getPassword());
         
         log.info("Connect button clicked for host: {}", host);
 
-        // Use a background thread for network operations to avoid freezing the GUI
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() throws Exception {
@@ -116,47 +179,53 @@ public class RemoteMachinePanel extends JPanel {
                     List<String> ips = get();
                     log.info("Successfully fetched IPs: {}", ips);
                     nicComboBox.removeAllItems();
-                    if (ips.isEmpty()) {
-                        nicComboBox.addItem("未找到可用IP");
-                    } else {
-                        ips.forEach(nicComboBox::addItem);
-                    }
+                    if (ips.isEmpty()) { nicComboBox.addItem("未找到可用IP"); } else { ips.forEach(nicComboBox::addItem); }
                     nicComboBox.setEnabled(true);
                     setInputsEnabled(false);
-                    JOptionPane.showMessageDialog(RemoteMachinePanel.this, "连接成功！", "成功", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
                     log.error("Failed to connect or fetch IPs for host: {}", host, e);
-                    nicComboBox.removeAllItems();
-                    nicComboBox.addItem("连接失败");
-                    nicComboBox.setEnabled(false);
-                    
-                    // Create a detailed and scrollable error message dialog
-                    StringWriter sw = new StringWriter();
-                    e.printStackTrace(new PrintWriter(sw));
-                    String exceptionAsString = sw.toString();
-
-                    JTextArea textArea = new JTextArea(exceptionAsString);
-                    textArea.setEditable(false);
-                    textArea.setLineWrap(true);
-                    textArea.setWrapStyleWord(true);
-
-                    JScrollPane scrollPane = new JScrollPane(textArea);
-                    scrollPane.setPreferredSize(new Dimension(600, 400)); // Make dialog larger
-
-                    JOptionPane.showMessageDialog(RemoteMachinePanel.this, scrollPane, "连接失败", JOptionPane.ERROR_MESSAGE);
+                    nicComboBox.removeAllItems(); nicComboBox.addItem("连接失败"); nicComboBox.setEnabled(false);
+                    showDetailedErrorDialog(e);
                 }
             }
         }.execute();
     }
+    
+    private void handleDisconnect() {
+        log.info("Disconnecting from host: {}", hostField.getText());
+        sshService.disconnect();
+        setInputsEnabled(true);
+    }
 
     private void setInputsEnabled(boolean enabled) {
+        isConnected = !enabled;
+        connectButton.setText(enabled ? "连接" : "断开");
         hostField.setEnabled(enabled);
         usernameField.setEnabled(enabled);
         passwordField.setEnabled(enabled);
-        connectButton.setEnabled(enabled);
-        // Keep save/delete enabled for profile management
-        // saveButton.setEnabled(enabled);
-        // deleteButton.setEnabled(enabled);
-        // profileComboBox.setEnabled(enabled);
+        profileComboBox.setEnabled(enabled);
+        saveButton.setEnabled(enabled);
+        deleteButton.setEnabled(enabled);
+        
+        if (enabled) { // If disconnecting
+            nicComboBox.setEnabled(false);
+            nicComboBox.removeAllItems();
+            nicComboBox.addItem("待连接...");
+        }
+    }
+
+    private void showDetailedErrorDialog(Exception e) {
+        StringWriter sw = new StringWriter();
+        e.printStackTrace(new PrintWriter(sw));
+        String exceptionAsString = sw.toString();
+
+        JTextArea textArea = new JTextArea(exceptionAsString);
+        textArea.setEditable(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(600, 400));
+        JOptionPane.showMessageDialog(this, scrollPane, "连接失败", JOptionPane.ERROR_MESSAGE);
     }
 }

@@ -20,7 +20,7 @@ public class NetworkService {
     public List<String> getRemoteIpAddresses() throws JSchException {
         // Regex to find IPv4 addresses, ignoring loopback (127.0.0.1) and link-local (169.254...)
         // and virtual/docker interfaces.
-        final Pattern ipPattern = Pattern.compile("inet (?!127\\.0\\.0\\.1|169\\.254\\.)(\\\\d{1,3}\\\\.{\\\\d{1,3}}\\\\.{\\\\d{1,3}}\\\\.{\\\\d{1,3}})");
+        final Pattern ipPattern = Pattern.compile("inet (?!127\\.0\\.0\\.1|169\\.254\\.)(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})");
 
         String output = sshService.executeCommand("ip -4 addr");
 
