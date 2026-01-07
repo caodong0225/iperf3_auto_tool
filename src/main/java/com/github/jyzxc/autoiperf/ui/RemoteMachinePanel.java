@@ -200,14 +200,22 @@ public class RemoteMachinePanel extends JPanel {
                 try {
                     List<String> ips = get();
                     log.info("Successfully connected and found IPs: {}", ips);
+
+                    // User story: If the SSH host IP is a VIP, it might not be in the list. Add it.
+                    String sshHost = hostField.getText().trim();
+                    if (!sshHost.isEmpty() && !ips.contains(sshHost)) {
+                        log.warn("SSH host '{}' not found in interface list. Adding it as a potential VIP.", sshHost);
+                        ips.add(0, sshHost); // Add to the top for visibility
+                    }
+
                     nicComboBox.removeAllItems();
                     if (ips.isEmpty()) { nicComboBox.addItem("未找到可用IP"); } else { ips.forEach(nicComboBox::addItem); }
                     nicComboBox.setEnabled(true);
                     setInputsEnabled(false);
                 } catch (Exception e) {
-                    log.error("Failed to connect or complete setup for host: {}", host, e);
+                    log.error("Failed to connect or complete setup for host: {}", hostField.getText(), e);
                     nicComboBox.removeAllItems(); nicComboBox.addItem("连接失败"); nicComboBox.setEnabled(false);
-                    sshService.disconnect();
+                    sshService.disconnect(); // Ensure disconnection on failure
                     showDetailedErrorDialog(e);
                 }
             }
