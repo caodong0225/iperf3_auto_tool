@@ -5,12 +5,12 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 
 /**
- * Panel for server-side configuration, including SSH credentials and profile management.
+ * A reusable panel for configuring a single remote test machine (either client or server role).
  */
-public class ServerConfigPanel extends JPanel {
+public class RemoteMachinePanel extends JPanel {
 
-    public ServerConfigPanel() {
-        setBorder(new TitledBorder("服务端配置"));
+    public RemoteMachinePanel(String title) {
+        setBorder(new TitledBorder(title));
         setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 2, 2, 2);
@@ -38,8 +38,7 @@ public class ServerConfigPanel extends JPanel {
         gbc.gridwidth = 2;
         add(new JTextField(""), gbc);
 
-        // Row 2: Port and Username
-        gbc.gridwidth = 1;
+        // Row 2: Username
         gbc.gridx = 0;
         gbc.gridy = 2;
         add(new JLabel("用户名:"), gbc);
@@ -68,5 +67,19 @@ public class ServerConfigPanel extends JPanel {
         buttonPanel.add(new JButton("保存"));
         buttonPanel.add(new JButton("删除"));
         add(buttonPanel, gbc);
+
+        // Row 5: NIC Selection
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        add(new JLabel("网卡 IP:"), gbc);
+        
+        gbc.gridx = 1;
+        gbc.gridy = 5;
+        gbc.gridwidth = 2;
+        JComboBox<String> nicComboBox = new JComboBox<>(new String[]{"待连接..."});
+        nicComboBox.setEnabled(false); // Disabled until connected
+        add(nicComboBox, gbc);
     }
 }

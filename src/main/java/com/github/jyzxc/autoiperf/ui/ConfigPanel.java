@@ -5,7 +5,8 @@ import java.awt.*;
 
 /**
  * The main configuration panel on the left side of the application.
- * It holds client, server, and test parameter configuration panels.
+ * It holds two RemoteMachinePanel instances for client and server roles,
+ * and a TestParametersPanel for common settings.
  */
 public class ConfigPanel extends JPanel {
 
@@ -15,17 +16,22 @@ public class ConfigPanel extends JPanel {
     }
 
     private void initComponents() {
-        JPanel serverAndClientPanel = new JPanel();
-        serverAndClientPanel.setLayout(new GridLayout(2, 1, 5, 5));
-        serverAndClientPanel.add(new ClientConfigPanel());
-        serverAndClientPanel.add(new ServerConfigPanel());
+        // Main container for machine configs
+        JSplitPane machineSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        machineSplitPane.setResizeWeight(0.5);
+        machineSplitPane.setTopComponent(new RemoteMachinePanel("测试机 A (客户端角色)"));
+        machineSplitPane.setBottomComponent(new RemoteMachinePanel("测试机 B (服务端角色)"));
 
-        add(serverAndClientPanel, BorderLayout.NORTH);
-        add(new TestParametersPanel(), BorderLayout.CENTER);
-
-        // Panel for action buttons
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        // Container for parameters and the main action button
+        JPanel bottomPanel = new JPanel(new BorderLayout(5,5));
+        bottomPanel.add(new TestParametersPanel(), BorderLayout.CENTER);
+        
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5));
         actionPanel.add(new JButton("开始测试"));
-        add(actionPanel, BorderLayout.SOUTH);
+        bottomPanel.add(actionPanel, BorderLayout.SOUTH);
+
+        // Add the two main sections to the panel
+        add(machineSplitPane, BorderLayout.CENTER);
+        add(bottomPanel, BorderLayout.SOUTH);
     }
 }
