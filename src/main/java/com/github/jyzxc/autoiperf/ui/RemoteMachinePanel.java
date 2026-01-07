@@ -228,8 +228,7 @@ public class RemoteMachinePanel extends JPanel {
         setInputsEnabled(true);
     }
 
-    private void setInputsEnabled(boolean enabled) {
-        isConnected = !enabled;
+    public void setPanelEnabled(boolean enabled) {
         connectButton.setText(enabled ? "连接" : "断开");
         hostField.setEnabled(enabled);
         usernameField.setEnabled(enabled);
@@ -237,8 +236,22 @@ public class RemoteMachinePanel extends JPanel {
         profileComboBox.setEnabled(enabled);
         saveButton.setEnabled(enabled);
         deleteButton.setEnabled(enabled);
+
+        // Special handling for connect button and NIC combo box
+        if (isConnected && enabled) {
+             connectButton.setEnabled(true); // Always allow disconnect
+        } else {
+             connectButton.setEnabled(enabled);
+        }
         
-        if (enabled) {
+        nicComboBox.setEnabled(!enabled && isConnected);
+    }
+    
+    private void setInputsEnabled(boolean enabled) {
+        isConnected = !enabled;
+        setPanelEnabled(enabled); // Call the main method
+        
+        if (enabled) { // If disconnecting
             nicComboBox.setEnabled(false);
             nicComboBox.removeAllItems();
             nicComboBox.addItem("待连接...");

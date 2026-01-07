@@ -19,3 +19,5 @@ logs/
 # Application-generated files
 profiles.json
 test_results/
+
+demo
