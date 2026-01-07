@@ -33,15 +33,17 @@ public class NetworkService {
     }
 
     /**
-     * Executes a ping command from the connected machine to a destination IP.
+     * Executes a ping command from the connected machine to a destination IP, binding to a specific source IP.
+     * @param sourceIp The source IP address on the client machine to ping from.
      * @param destinationIp The IP address to ping.
      * @return A string containing the raw output of the ping command.
      * @throws JSchException if the SSH command fails.
      */
-    public String ping(String destinationIp) throws JSchException {
+    public String ping(String sourceIp, String destinationIp) throws JSchException {
+        // -I <interface_address>: bind to a specific source IP. Crucial for multi-homed machines.
         // -c 4: send 4 packets. A common choice for a quick test.
         // -W 2: wait 2 seconds for a response.
-        String command = String.format("ping -c 4 -W 2 %s", destinationIp);
+        String command = String.format("ping -I %s -c 4 -W 2 %s", sourceIp, destinationIp);
         return sshService.executeCommand(command);
     }
 }
