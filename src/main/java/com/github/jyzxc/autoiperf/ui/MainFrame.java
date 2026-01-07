@@ -1,43 +1,39 @@
 package com.github.jyzxc.autoiperf.ui;
 
+import com.github.jyzxc.autoiperf.controller.MainController;
+
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * The main window frame of the application.
- */
 public class MainFrame extends JFrame {
 
-    private JMenuBar menuBar;
+    private MainController mainController;
     private ConfigPanel configPanel;
     private ResultsPanel resultsPanel;
     private StatusBar statusBar;
 
     public MainFrame() {
         initComponents();
+        // The controller will orchestrate actions between different panels
+        mainController = new MainController(this);
     }
 
     private void initComponents() {
         setTitle("Auto iPerf3 - Network Performance Tester");
         setSize(1024, 768);
-        setLocationRelativeTo(null); // Center the window
+        setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // Create Panels
         configPanel = new ConfigPanel();
         resultsPanel = new ResultsPanel();
         statusBar = new StatusBar();
 
-        // Setup Menu Bar
-        menuBar = createMenuBar();
-        setJMenuBar(menuBar);
+        setJMenuBar(createMenuBar());
 
-        // Setup Split Pane
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, configPanel, resultsPanel);
-        splitPane.setDividerLocation(350); // Give config panel a fixed initial width
+        splitPane.setDividerLocation(450);
 
-        // Add components to the frame
         add(splitPane, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
     }
@@ -55,5 +51,17 @@ public class MainFrame extends JFrame {
         menuBar.add(fileMenu);
         menuBar.add(helpMenu);
         return menuBar;
+    }
+
+    public ConfigPanel getConfigPanel() {
+        return configPanel;
+    }
+
+    public ResultsPanel getResultsPanel() {
+        return resultsPanel;
+    }
+
+    public StatusBar getStatusBar() {
+        return statusBar;
     }
 }

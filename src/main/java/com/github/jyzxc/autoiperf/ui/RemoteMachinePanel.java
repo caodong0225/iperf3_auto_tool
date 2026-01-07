@@ -13,7 +13,9 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class RemoteMachinePanel extends JPanel {
 
@@ -37,6 +39,8 @@ public class RemoteMachinePanel extends JPanel {
     private JComboBox<String> nicComboBox;
 
     private boolean isConnected = false;
+    private final List<Consumer<Boolean>> connectionStateListeners = new ArrayList<>();
+
 
     public RemoteMachinePanel(String title) {
         this.sshService = new SshService();
@@ -51,8 +55,16 @@ public class RemoteMachinePanel extends JPanel {
         loadProfilesIntoComboBox();
     }
 
+    // Getters for controller to access services and state
+    public boolean isConnected() { return isConnected; }
+    public String getSelectedNicIp() { return (String) nicComboBox.getSelectedItem(); }
+    public NetworkService getNetworkService() { return networkService; }
+
+    public void addConnectionStateListener(Consumer<Boolean> listener) {
+        connectionStateListeners.add(listener);
+    }
+
     private void initComponents() {
-        // ... (same as before)
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 2, 2, 2);
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -112,6 +124,12 @@ public class RemoteMachinePanel extends JPanel {
         saveButton.addActionListener(e -> handleSaveProfile());
         deleteButton.addActionListener(e -> handleDeleteProfile());
         profileComboBox.addActionListener(e -> handleProfileSelection());
+        
+        nicComboBox.addActionListener(e -> fireConnectionStateChanged());
+    }
+        
+    private void fireConnectionStateChanged() {
+        connectionStateListeners.forEach(l -> l.accept(isConnected));
     }
 
     private void loadProfilesIntoComboBox() {
@@ -128,7 +146,6 @@ public class RemoteMachinePanel extends JPanel {
             usernameField.setText(profile.getUsername());
             passwordField.setText(profile.getPassword());
         } else {
-            // "新建连接..." selected
             hostField.setText("");
             usernameField.setText("root");
             passwordField.setText("");
@@ -141,7 +158,6 @@ public class RemoteMachinePanel extends JPanel {
             SshProfile profile = new SshProfile(profileName.trim(), hostField.getText(), usernameField.getText(), new String(passwordField.getPassword()));
             profileService.saveProfile(profile);
             loadProfilesIntoComboBox();
-            // This is tricky, so we just reload. A better implementation would use a custom model.
             JOptionPane.showMessageDialog(this, "配置已保存！");
         }
     }
@@ -171,16 +187,11 @@ public class RemoteMachinePanel extends JPanel {
             @Override
             protected List<String> doInBackground() throws Exception {
                 log.debug("SwingWorker started for SSH connection.");
-                // 1. Connect
                 sshService.connect(username, password, host, 22);
-
-                // 2. Check for iperf3
                 if (!environmentService.checkIperf3Exists(password)) {
-                    sshService.disconnect(); // Clean up connection
-                    throw new RuntimeException("iPerf3 not found on the remote host.\nPlease ensure 'iperf3' is installed and in the user's PATH, or that the user has sudo rights.");
+                    sshService.disconnect();
+                    throw new RuntimeException("iPerf3 not found. Please install it on the remote machine.");
                 }
-
-                // 3. Get IPs if check is successful
                 return networkService.getRemoteIpAddresses();
             }
 
@@ -193,11 +204,10 @@ public class RemoteMachinePanel extends JPanel {
                     if (ips.isEmpty()) { nicComboBox.addItem("未找到可用IP"); } else { ips.forEach(nicComboBox::addItem); }
                     nicComboBox.setEnabled(true);
                     setInputsEnabled(false);
-                    // No need for a popup on success, the UI state change is enough feedback.
                 } catch (Exception e) {
                     log.error("Failed to connect or complete setup for host: {}", host, e);
                     nicComboBox.removeAllItems(); nicComboBox.addItem("连接失败"); nicComboBox.setEnabled(false);
-                    sshService.disconnect(); // Ensure disconnection on failure
+                    sshService.disconnect();
                     showDetailedErrorDialog(e);
                 }
             }
@@ -220,14 +230,15 @@ public class RemoteMachinePanel extends JPanel {
         saveButton.setEnabled(enabled);
         deleteButton.setEnabled(enabled);
         
-        if (enabled) { // If disconnecting
+        if (enabled) {
             nicComboBox.setEnabled(false);
             nicComboBox.removeAllItems();
             nicComboBox.addItem("待连接...");
         }
+        fireConnectionStateChanged();
     }
 
-    private void showDetailedErrorDialog(Exception e) {
+    public void showDetailedErrorDialog(Exception e) {
         StringWriter sw = new StringWriter();
         e.printStackTrace(new PrintWriter(sw));
         String exceptionAsString = sw.toString();

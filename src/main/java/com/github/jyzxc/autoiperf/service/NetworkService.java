@@ -31,4 +31,17 @@ public class NetworkService {
                 .distinct()
                 .collect(Collectors.toList());
     }
+
+    /**
+     * Executes a ping command from the connected machine to a destination IP.
+     * @param destinationIp The IP address to ping.
+     * @return A string containing the raw output of the ping command.
+     * @throws JSchException if the SSH command fails.
+     */
+    public String ping(String destinationIp) throws JSchException {
+        // -c 4: send 4 packets. A common choice for a quick test.
+        // -W 2: wait 2 seconds for a response.
+        String command = String.format("ping -c 4 -W 2 %s", destinationIp);
+        return sshService.executeCommand(command);
+    }
 }
