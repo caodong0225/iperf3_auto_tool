@@ -1,16 +1,3 @@
-package com.github.jyzxc.autoiperf.service;
-
-import com.github.jyzxc.autoiperf.model.IperfResult;
-import com.github.jyzxc.autoiperf.model.TestConfig;
-import com.github.jyzxc.autoiperf.sshtool.SshService;
-import com.google.gson.Gson;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 public class TestExecutionService {
 
     private static final Logger log = LoggerFactory.getLogger(TestExecutionService.class);
@@ -18,7 +5,6 @@ public class TestExecutionService {
 
     public IperfResult executeClient(SshService clientSsh, TestConfig config) throws Exception {
         log.info("Executing client test...");
-        // Example command: iperf3 -c [server_ip] -p [port] -B [client_ip] -t [duration] -l [packet_size] -J
         String command = String.format("iperf3 -c %s -p %d -B %s -t %d -l %s -J",
                 config.getServerBindAddress(),
                 config.getTestPort(),
@@ -40,7 +26,6 @@ public class TestExecutionService {
 
     public String startServer(SshService serverSsh, TestConfig config) throws Exception {
         log.info("Starting iperf3 server in the background...");
-        // 1. Create a unique temp file
         String tempFileCommand = "mktemp -p /tmp iperf-server.XXXXXX.json";
         String tempFilePath = serverSsh.executeCommand(tempFileCommand).trim();
 
@@ -50,7 +35,6 @@ public class TestExecutionService {
         }
         log.info("Server temp file created at: {}", tempFilePath);
 
-        // 2. Start iperf3 server and get PID
         String serverCommand = String.format("iperf3 -s -p %d -B %s -J --logfile %s & echo $!",
                 config.getTestPort(),
                 config.getServerBindAddress(),
@@ -63,9 +47,30 @@ public class TestExecutionService {
              log.error("Failed to get a valid PID for the iperf3 server process. Output: {}", serverPid);
              throw new Exception("Failed to start iperf3 server or get its PID.");
         }
-        log.info("iPerf3 server started with PID: {} on host: {}", serverPid, config.getServerHost());
+        log.info("iPerf3 server started with PID: {} on host: {}. Now verifying it is listening.", serverPid, config.getServerHost());
 
-        // Return a composite string of path and PID
+        // ** Polling mechanism to ensure server is ready **
+        long startTime = System.currentTimeMillis();
+        long timeout = 5000; // 5 seconds
+        boolean isListening = false;
+        String checkListenCommand = String.format("ss -tlpn | grep ':%d'", config.getTestPort());
+        
+        while (System.currentTimeMillis() - startTime < timeout) {
+            String checkResult = serverSsh.executeCommand(checkListenCommand);
+            if (checkResult != null && !checkResult.trim().isEmpty() && checkResult.contains(String.valueOf(config.getTestPort()))) {
+                log.info("Server is listening on port {}. Proceeding with test.", config.getTestPort());
+                isListening = true;
+                break;
+            }
+            Thread.sleep(200); // Poll every 200ms
+        }
+
+        if (!isListening) {
+            log.error("Server did not start listening on port {} within {}ms.", config.getTestPort(), timeout);
+            cleanupServer(serverSsh, tempFilePath, serverPid); // Attempt to clean up the failed process
+            throw new Exception("Server failed to start listening on port " + config.getTestPort() + " within the timeout period.");
+        }
+
         return tempFilePath + ";" + serverPid;
     }
 
