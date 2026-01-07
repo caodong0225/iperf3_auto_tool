@@ -28,8 +28,8 @@ public class ResultsPanel extends JPanel {
         JScrollPane clientScrollPane = new JScrollPane(clientArea);
         clientScrollPane.setBorder(new TitledBorder("测试机 A (客户端) 结果"));
 
-        // Vertical Split Pane
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, serverScrollPane, clientScrollPane);
+        // Vertical Split Pane - Client (Top), Server (Bottom)
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, clientScrollPane, serverScrollPane);
         splitPane.setResizeWeight(0.5); // Divide space equally
 
         add(splitPane, BorderLayout.CENTER);
