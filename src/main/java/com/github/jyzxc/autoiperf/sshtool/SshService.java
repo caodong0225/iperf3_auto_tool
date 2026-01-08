@@ -34,7 +34,6 @@ public class SshService {
             throw new JSchException("Session is not connected.");
         }
 
-        log.debug("Executing remote command: {}", command);
         ChannelExec channel = null;
         try {
             channel = (ChannelExec) session.openChannel("exec");
