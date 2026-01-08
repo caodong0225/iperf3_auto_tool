@@ -25,10 +25,15 @@ public class ResultsPanel extends JPanel {
         serverScrollPane.setBorder(new TitledBorder("服务端日志"));
         serverScrollPane.setPreferredSize(new Dimension(400, 200));
 
-        clientResultArea = new JTextArea("客户端测试结果将显示在这里...");
+        clientResultArea = new JTextArea();
         clientResultArea.setEditable(false);
+        clientResultArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        clientResultArea.setLineWrap(true);
+        clientResultArea.setWrapStyleWord(true);
+        clientResultArea.setText("客户端测试日志将显示在这里...\n");
         JScrollPane clientScrollPane = new JScrollPane(clientResultArea);
-        clientScrollPane.setBorder(new TitledBorder("客户端结果"));
+        clientScrollPane.setBorder(new TitledBorder("客户端日志"));
+        clientScrollPane.setPreferredSize(new Dimension(400, 200));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, serverScrollPane, clientScrollPane);
         splitPane.setResizeWeight(0.4); 

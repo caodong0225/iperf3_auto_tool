@@ -1,6 +1,9 @@
 package com.github.jyzxc.autoiperf.ui;
 
+import com.github.jyzxc.autoiperf.controller.ClientControlController;
 import com.github.jyzxc.autoiperf.controller.ServerControlController;
+import com.github.jyzxc.autoiperf.service.ClientManagerService;
+import com.github.jyzxc.autoiperf.service.ClientTestService;
 import com.github.jyzxc.autoiperf.service.ServerManagerService;
 import lombok.Getter;
 
@@ -18,9 +21,12 @@ public class MainFrame extends JFrame {
 
     // Services
     private ServerManagerService serverManagerService;
+    private ClientTestService clientTestService;
+    private ClientManagerService clientManagerService;
 
     // Controllers
     private ServerControlController serverControlController;
+    private ClientControlController clientControlController;
 
 
     public MainFrame() {
@@ -36,6 +42,8 @@ public class MainFrame extends JFrame {
         
         // 1. Instantiate Core Services
         serverManagerService = new ServerManagerService();
+        clientTestService = new ClientTestService();
+        clientManagerService = new ClientManagerService();
 
         // 2. Instantiate Main Panels
         configPanel = new ConfigPanel();
@@ -47,7 +55,13 @@ public class MainFrame extends JFrame {
                 configPanel.getServerControlPanel(), 
                 serverManagerService,
                 resultsPanel);
-        // Other controllers will be initialized here later
+        
+        clientControlController = new ClientControlController(
+                configPanel.getClientControlPanel(),
+                clientTestService,
+                clientManagerService,
+                resultsPanel,
+                configPanel.getServerControlPanel());
 
         setJMenuBar(createMenuBar());
 
