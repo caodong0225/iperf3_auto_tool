@@ -1,5 +1,7 @@
 package com.github.jyzxc.autoiperf.ui;
 
+import com.github.jyzxc.autoiperf.controller.ServerControlController;
+import com.github.jyzxc.autoiperf.service.ServerManagerService;
 import lombok.Getter;
 
 import javax.swing.*;
@@ -14,9 +16,15 @@ public class MainFrame extends JFrame {
     @Getter
     private StatusBar statusBar;
 
+    // Services
+    private ServerManagerService serverManagerService;
+
+    // Controllers
+    private ServerControlController serverControlController;
+
+
     public MainFrame() {
         initComponents();
-        // Controller initialization will be handled in a separate, dedicated class or method.
     }
 
     private void initComponents() {
@@ -25,10 +33,18 @@ public class MainFrame extends JFrame {
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
+        
+        // 1. Instantiate Core Services
+        serverManagerService = new ServerManagerService();
 
+        // 2. Instantiate Main Panels
         configPanel = new ConfigPanel();
         resultsPanel = new ResultsPanel();
         statusBar = new StatusBar();
+        
+        // 3. Instantiate Controllers and link them to Views and Services
+        serverControlController = new ServerControlController(configPanel.getServerControlPanel(), serverManagerService);
+        // Other controllers will be initialized here later
 
         setJMenuBar(createMenuBar());
 
