@@ -101,38 +101,47 @@ public class ServerManagerService {
     }
 
 
-    public List<IperfServerInstance> discoverRunningInstances(SshService sshService, String host) throws Exception {
-        log.info("Discovering running iperf3 instances on host: {}", host);
-        List<IperfServerInstance> discoveredInstances = new ArrayList<>();
-
-        // pgrep -af "iperf3 -s": Find processes whose command line matches "iperf3 -s"
-        String command = "pgrep -af \"iperf3 -s\"";
-        String output = sshService.executeCommand(command);
-
-        if (output == null || output.trim().isEmpty() || output.toLowerCase().contains("error")) {
-            log.info("No running iperf3 server instances found or pgrep failed on host: {}", host);
-            return discoveredInstances;
-        }
-
-        // Regex to capture PID, -p port, and -B bindAddress from lines like:
-        // 12345 iperf3 -s -p 5202 -B 192.168.1.100 -J --logfile /tmp/log.json
-        Pattern pattern = Pattern.compile("(\\d+)\\s+iperf3 -s(?:(?!-c).)*?-p\\s+(\\d+)(?:(?!-c).)*?-B\\s+([\\d.]+)");
-
-        String[] lines = output.split("\n");
-        for (String line : lines) {
-            if (line.trim().isEmpty()) continue;
-
-            Matcher matcher = pattern.matcher(line.trim());
-            if (matcher.find()) {
+        public List<IperfServerInstance> discoverRunningInstances(SshService sshService, String host) throws Exception {
+            log.info("Discovering running iperf3 instances on host: {}", host);
+            List<IperfServerInstance> discoveredInstances = new ArrayList<>();
+    
+            String command = "pgrep -af \"iperf3\"";
+            String output = sshService.executeCommand(command);
+    
+            if (output == null || output.trim().isEmpty() || output.toLowerCase().contains("error")) {
+                log.info("No running iperf3 processes found or pgrep failed on host: {}", host);
+                return discoveredInstances;
+            }
+    
+            Pattern portPattern = Pattern.compile("-p\\s+(\\d+)");
+            Pattern bindPattern = Pattern.compile("-B\\s+([\\d.]+)");
+    
+            String[] lines = output.split("\n");
+            for (String line : lines) {
+                line = line.trim();
+                if (line.isEmpty() || !(line.contains(" -s") || line.contains(" --server"))) {
+                    continue; // Skip non-server processes
+                }
+    
+                String[] parts = line.split("\\s+", 2);
+                if (parts.length < 2) continue;
+    
                 try {
-                    int pid = Integer.parseInt(matcher.group(1));
-                    int port = Integer.parseInt(matcher.group(2));
-                    String bindAddress = matcher.group(3);
-
-                    log.info("Discovered iperf3 instance -> PID: {}, Port: {}, Bind Address: {}", pid, port, bindAddress);
-
+                    int pid = Integer.parseInt(parts[0]);
+                    String cmdLine = parts[1];
+    
+                    // Find port
+                    Matcher portMatcher = portPattern.matcher(cmdLine);
+                    int port = portMatcher.find() ? Integer.parseInt(portMatcher.group(1)) : 5201; // Default iperf3 port
+    
+                    // Find bind address
+                    Matcher bindMatcher = bindPattern.matcher(cmdLine);
+                    String bindAddress = bindMatcher.find() ? bindMatcher.group(1) : "0.0.0.0"; // Default bind address
+    
+                    log.info("Discovered iperf3 server instance -> PID: {}, Port: {}, Bind Address: {}", pid, port, bindAddress);
+    
                     IperfServerInstance instance = IperfServerInstance.builder()
-                            .instanceId(UUID.randomUUID().toString()) // Generate a new UI-internal ID
+                            .instanceId(UUID.randomUUID().toString())
                             .remoteHost(host)
                             .pid(pid)
                             .listeningPort(port)
@@ -140,13 +149,10 @@ public class ServerManagerService {
                             .status(IperfServerInstance.ServerStatus.RUNNING)
                             .build();
                     discoveredInstances.add(instance);
+    
                 } catch (NumberFormatException e) {
-                    log.warn("Failed to parse PID or port from pgrep output line: '{}'", line, e);
+                    log.warn("Failed to parse PID from pgrep output line: '{}'", line, e);
                 }
-            } else {
-                log.warn("pgrep output line did not match expected pattern: '{}'", line);
             }
-        }
-        return discoveredInstances;
-    }
-}
+            return discoveredInstances;
+        }}

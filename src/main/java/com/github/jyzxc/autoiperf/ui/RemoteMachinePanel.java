@@ -232,7 +232,7 @@ public class RemoteMachinePanel extends JPanel {
     }
 
     public void setPanelEnabled(boolean enabled) {
-        connectButton.setText(enabled ? "连接" : "断开");
+        // Enable/disable all input fields except the connect button
         hostField.setEnabled(enabled);
         usernameField.setEnabled(enabled);
         passwordField.setEnabled(enabled);
@@ -240,25 +240,31 @@ public class RemoteMachinePanel extends JPanel {
         saveButton.setEnabled(enabled);
         deleteButton.setEnabled(enabled);
 
-        // Special handling for connect button and NIC combo box
-        if (isConnected && enabled) {
-             connectButton.setEnabled(true); // Always allow disconnect
+        // Special handling for the connect button's state
+        if (isConnected) {
+            connectButton.setEnabled(true); // Always allow user to disconnect
+            connectButton.setText("断开连接");
         } else {
-             connectButton.setEnabled(enabled);
+            connectButton.setEnabled(enabled);
+            connectButton.setText("连接");
         }
         
-        nicComboBox.setEnabled(!enabled && isConnected);
+        // NIC combo box is only enabled when connected
+        nicComboBox.setEnabled(isConnected);
     }
     
     private void setInputsEnabled(boolean enabled) {
-        isConnected = !enabled;
-        setPanelEnabled(enabled); // Call the main method
+        this.isConnected = !enabled;
         
-        if (enabled) { // If disconnecting
+        if (isConnected) { // Just connected
+             // Logic to update UI is now primarily in setPanelEnabled
+        } else { // Just disconnected
             nicComboBox.setEnabled(false);
             nicComboBox.removeAllItems();
             nicComboBox.addItem("待连接...");
         }
+
+        setPanelEnabled(enabled); // Update all panel components based on the new state
         fireConnectionStateChanged();
     }
 
