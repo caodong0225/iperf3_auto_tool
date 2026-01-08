@@ -140,19 +140,37 @@ public class ServerManagerService {
     
                     log.info("Discovered iperf3 server instance -> PID: {}, Port: {}, Bind Address: {}", pid, port, bindAddress);
     
-                    IperfServerInstance instance = IperfServerInstance.builder()
-                            .instanceId(UUID.randomUUID().toString())
-                            .remoteHost(host)
-                            .pid(pid)
-                            .listeningPort(port)
-                            .boundIp(bindAddress)
-                            .status(IperfServerInstance.ServerStatus.RUNNING)
-                            .build();
-                    discoveredInstances.add(instance);
+                                    IperfServerInstance instance = IperfServerInstance.builder()
+                                            .instanceId(UUID.randomUUID().toString())
+                                            .remoteHost(host)
+                                            .pid(pid)
+                                            .commandLine(cmdLine)
+                                            .listeningPort(port)
+                                            .boundIp(bindAddress)
+                                            .status(IperfServerInstance.ServerStatus.RUNNING)
+                                            .build();                    discoveredInstances.add(instance);
     
                 } catch (NumberFormatException e) {
                     log.warn("Failed to parse PID from pgrep output line: '{}'", line, e);
                 }
             }
-            return discoveredInstances;
-        }}
+                    return discoveredInstances;
+                }
+            
+                public void stopServer(SshService sshService, int pid) throws Exception {
+                    log.info("Attempting to gracefully stop process with PID: {}", pid);
+                    String command = "kill " + pid;
+                    sshService.executeCommand(command);
+                    // We don't have a reliable way to check for command success here without more complex parsing,
+                    // but if it fails, executeCommand will likely throw an exception or return an error string.
+                    log.info("Sent SIGTERM signal to PID: {}", pid);
+                }
+            
+                public void killServer(SshService sshService, int pid) throws Exception {
+                    log.info("Attempting to forcefully kill process with PID: {}", pid);
+                    String command = "kill -9 " + pid;
+                    sshService.executeCommand(command);
+                    log.info("Sent SIGKILL signal to PID: {}", pid);
+                }
+            }
+            

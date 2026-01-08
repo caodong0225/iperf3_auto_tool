@@ -14,6 +14,7 @@ public class IperfServerInstance {
     private String boundIp;
     private int listeningPort;
     private int pid; // Process ID
+    private String commandLine; // The full command line of the process
     private ServerStatus status;
 
     public enum ServerStatus {

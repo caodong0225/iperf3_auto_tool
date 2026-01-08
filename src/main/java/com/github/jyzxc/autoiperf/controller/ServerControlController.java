@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.util.List;
 
 public class ServerControlController {
 
@@ -26,6 +27,8 @@ public class ServerControlController {
     private void addListeners() {
         view.getStartServerButton().addActionListener(e -> handleStartServer());
         view.getRemoteMachinePanel().addConnectionStateListener(this::handleConnectionStateChange);
+        view.getStopServerButton().addActionListener(e -> handleStopOrKillServer(false));
+        view.getKillServerButton().addActionListener(e -> handleStopOrKillServer(true));
     }
 
     private void handleConnectionStateChange(boolean isConnected) {
@@ -42,16 +45,16 @@ public class ServerControlController {
         RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
         String host = remoteMachinePanel.getHostField().getText();
 
-        new SwingWorker<java.util.List<IperfServerInstance>, Void>() {
+        new SwingWorker<List<IperfServerInstance>, Void>() {
             @Override
-protected java.util.List<IperfServerInstance> doInBackground() throws Exception {
+            protected List<IperfServerInstance> doInBackground() throws Exception {
                 return service.discoverRunningInstances(remoteMachinePanel.getSshService(), host);
             }
 
             @Override
             protected void done() {
                 try {
-                    java.util.List<IperfServerInstance> instances = get();
+                    List<IperfServerInstance> instances = get();
                     updateInstanceTable(instances);
                     log.info("Successfully discovered {} running instances.", instances.size());
                 } catch (Exception e) {
@@ -62,25 +65,6 @@ protected java.util.List<IperfServerInstance> doInBackground() throws Exception 
         }.execute();
     }
 
-    private void updateInstanceTable(java.util.List<IperfServerInstance> instances) {
-        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
-        model.setRowCount(0); // Clear table
-        for (IperfServerInstance instance : instances) {
-            model.addRow(new Object[]{
-                    instance.getRemoteHost(),
-                    instance.getBoundIp(),
-                    instance.getListeningPort(),
-                    instance.getPid(),
-                    instance.getStatus()
-            });
-        }
-    }
-
-    private void clearInstanceTable() {
-        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
-        model.setRowCount(0); // Clear table
-    }
-
     private void handleStartServer() {
         log.info("'Start New Server' button clicked.");
         RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
@@ -89,7 +73,7 @@ protected java.util.List<IperfServerInstance> doInBackground() throws Exception 
             JOptionPane.showMessageDialog(view, "请先连接到服务端主机。", "提示", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
+
         String selectedIp = remoteMachinePanel.getSelectedNicIp();
         if (selectedIp == null || selectedIp.startsWith("待") || selectedIp.startsWith("未")) {
             JOptionPane.showMessageDialog(view, "请为服务端主机选择一个用于绑定的网卡IP。", "提示", JOptionPane.WARNING_MESSAGE);
@@ -99,7 +83,6 @@ protected java.util.List<IperfServerInstance> doInBackground() throws Exception 
         int port = (Integer) view.getPortSpinner().getValue();
         String host = remoteMachinePanel.getHostField().getText();
 
-        // Disable button to prevent double-clicking
         view.getStartServerButton().setEnabled(false);
         view.getStartServerButton().setText("正在启动...");
 
@@ -125,15 +108,75 @@ protected java.util.List<IperfServerInstance> doInBackground() throws Exception 
             }
         }.execute();
     }
-    
+
+    private void handleStopOrKillServer(boolean force) {
+        JTable table = view.getServerInstancesTable();
+        int selectedRow = table.getSelectedRow();
+
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(view, "请先在表格中选择一个要操作的服务实例。", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // PID is in the first column (index 0)
+        int pid = (Integer) table.getModel().getValueAt(selectedRow, 0);
+        String action = force ? "强制终止" : "停止";
+        log.info("User requested to {} server with PID {}", action.toLowerCase(), pid);
+
+        view.getStopServerButton().setEnabled(false);
+        view.getKillServerButton().setEnabled(false);
+
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+                if (force) {
+                    service.killServer(remoteMachinePanel.getSshService(), pid);
+                } else {
+                    service.stopServer(remoteMachinePanel.getSshService(), pid);
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions from the background task
+                    log.info("Successfully {} process with PID {}", action.toLowerCase(), pid);
+                    ((DefaultTableModel) table.getModel()).removeRow(selectedRow);
+                    JOptionPane.showMessageDialog(view, "PID: " + pid + " 已被成功" + action + "。", "操作成功", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception e) {
+                    log.error("Failed to {} process with PID {}", action.toLowerCase(), pid, e);
+                    JOptionPane.showMessageDialog(view, action + " PID: " + pid + " 失败: \n" + e.getMessage(), "操作失败", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    view.getStopServerButton().setEnabled(true);
+                    view.getKillServerButton().setEnabled(true);
+                }
+            }
+        }.execute();
+    }
+
     private void addInstanceToTable(IperfServerInstance instance) {
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
         model.addRow(new Object[]{
-                instance.getRemoteHost(),
+                instance.getPid(),
+                instance.getStatus(),
                 instance.getBoundIp(),
                 instance.getListeningPort(),
-                instance.getPid(),
-                instance.getStatus()
+                instance.getCommandLine()
         });
+    }
+
+    private void updateInstanceTable(List<IperfServerInstance> instances) {
+        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        model.setRowCount(0); // Clear table
+        for (IperfServerInstance instance : instances) {
+            addInstanceToTable(instance);
+        }
+    }
+
+    private void clearInstanceTable() {
+        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        model.setRowCount(0);
     }
 }

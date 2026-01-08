@@ -35,7 +35,7 @@ public class ServerControlPanel extends JPanel {
         topPanel.add(startControlsPanel, BorderLayout.SOUTH);
 
         // Center part: Table of running instances
-        String[] columnNames = {"主机", "监听IP", "端口", "PID", "状态"};
+        String[] columnNames = {"PID", "状态", "监听IP", "端口", "完整命令"};
         DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
