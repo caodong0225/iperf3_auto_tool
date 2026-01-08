@@ -172,11 +172,21 @@ public class ServerControlController {
     }
 
     private void updateInstanceTable(List<IperfServerInstance> instances) {
+        log.debug("Attempting to update table with {} instances.", instances.size());
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        
+        log.debug("Table model row count before update: {}", model.getRowCount());
         model.setRowCount(0); // Clear table
+        log.debug("Table model row count after clearing: {}", model.getRowCount());
+
         for (IperfServerInstance instance : instances) {
+            log.debug("Adding instance to table: PID={}", instance.getPid());
             addInstanceToTable(instance);
         }
+        
+        log.debug("Table model row count after adding all instances: {}", model.getRowCount());
+        
+        // Force UI refresh
         view.getServerInstancesTable().revalidate();
         view.getServerInstancesTable().repaint();
     }
