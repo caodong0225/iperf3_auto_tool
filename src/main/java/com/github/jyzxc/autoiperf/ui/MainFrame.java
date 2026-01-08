@@ -1,6 +1,5 @@
 package com.github.jyzxc.autoiperf.ui;
 
-import com.github.jyzxc.autoiperf.controller.MainController;
 import lombok.Getter;
 
 import javax.swing.*;
@@ -8,7 +7,6 @@ import java.awt.*;
 
 public class MainFrame extends JFrame {
 
-    private MainController mainController;
     @Getter
     private ConfigPanel configPanel;
     @Getter
@@ -18,12 +16,11 @@ public class MainFrame extends JFrame {
 
     public MainFrame() {
         initComponents();
-        // The controller will orchestrate actions between different panels
-        mainController = new MainController(this);
+        // Controller initialization will be handled in a separate, dedicated class or method.
     }
 
     private void initComponents() {
-        setTitle("Auto iPerf3 - Network Performance Tester");
+        setTitle("Auto iPerf3 - Management & Testing Tool");
         setSize(1024, 768);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -36,7 +33,7 @@ public class MainFrame extends JFrame {
         setJMenuBar(createMenuBar());
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, configPanel, resultsPanel);
-        splitPane.setDividerLocation(450);
+        splitPane.setDividerLocation(550);
 
         add(splitPane, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
@@ -56,5 +53,4 @@ public class MainFrame extends JFrame {
         menuBar.add(helpMenu);
         return menuBar;
     }
-
 }

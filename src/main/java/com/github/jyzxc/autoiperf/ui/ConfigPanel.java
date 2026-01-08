@@ -7,53 +7,32 @@ import java.awt.*;
 
 /**
  * The main configuration panel on the left side of the application.
- * It holds two RemoteMachinePanel instances for client and server roles,
- * and a TestParametersPanel for common settings.
+ * It holds the server and client control panels.
  */
+@Getter
 public class ConfigPanel extends JPanel {
 
-    @Getter
-    private RemoteMachinePanel clientMachinePanel;
-    @Getter
-    private RemoteMachinePanel serverMachinePanel;
-    @Getter
-    private TestParametersPanel testParametersPanel; // Added field
-    @Getter
-    private JButton testConnectivityButton;
-    @Getter
-    private JButton startTestButton;
+    private ServerControlPanel serverControlPanel;
+    private ClientControlPanel clientControlPanel;
 
     public ConfigPanel() {
-        setLayout(new BorderLayout(5, 5));
+        setLayout(new BorderLayout());
         initComponents();
     }
 
     private void initComponents() {
-        // Main container for machine configs
-        JSplitPane machineSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        machineSplitPane.setResizeWeight(0.5);
-        clientMachinePanel = new RemoteMachinePanel("测试机 A (客户端角色)");
-        serverMachinePanel = new RemoteMachinePanel("测试机 B (服务端角色)");
-        machineSplitPane.setTopComponent(clientMachinePanel);
-        machineSplitPane.setBottomComponent(serverMachinePanel);
+        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        mainSplitPane.setResizeWeight(0.5);
 
-        // Container for parameters and the main action button
-        JPanel bottomPanel = new JPanel(new BorderLayout(5,5));
-        testParametersPanel = new TestParametersPanel(); // Instantiate and assign to field
-        bottomPanel.add(testParametersPanel, BorderLayout.CENTER);
+        // The top part for Server Management
+        serverControlPanel = new ServerControlPanel();
 
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5));
-        testConnectivityButton = new JButton("测试连通性");
-        startTestButton = new JButton("开始测试");
-        startTestButton.setEnabled(false); // Initially disabled
+        // The bottom part for Client Management
+        clientControlPanel = new ClientControlPanel();
 
-        actionPanel.add(testConnectivityButton);
-        actionPanel.add(startTestButton);
-        bottomPanel.add(actionPanel, BorderLayout.SOUTH);
+        mainSplitPane.setTopComponent(serverControlPanel);
+        mainSplitPane.setBottomComponent(clientControlPanel);
 
-        // Add the two main sections to the panel
-        add(machineSplitPane, BorderLayout.CENTER);
-        add(bottomPanel, BorderLayout.SOUTH);
+        add(mainSplitPane, BorderLayout.CENTER);
     }
-
 }
