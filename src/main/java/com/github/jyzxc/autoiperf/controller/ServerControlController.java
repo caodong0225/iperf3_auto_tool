@@ -102,6 +102,10 @@ public class ServerControlController {
     }
 
     private void handleDiscoverInstances() {
+        handleDiscoverInstances(false);
+    }
+    
+    private void handleDiscoverInstances(boolean isAutoRefresh) {
         RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
         String host = remoteMachinePanel.getHostField().getText();
 
@@ -126,6 +130,8 @@ public class ServerControlController {
                                         instance.getPid(), instance.getListeningPort(), 
                                         instance.getBoundIp(), instance.getStatus()));
                             }
+                        } else {
+                            log.debug("Auto-refresh: Found {} running server instances", instances.size());
                         }
                     });
                 } catch (Exception e) {
@@ -134,6 +140,8 @@ public class ServerControlController {
                     if (!isAutoRefresh) {
                         appendServerLog(String.format("发现服务实例失败: %s", e.getMessage()));
                         JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    } else {
+                        log.debug("Auto-refresh failed: {}", e.getMessage());
                     }
                 }
             }

@@ -22,12 +22,16 @@ public class ServerManagerService {
     public IperfServerInstance startServer(SshService sshService, String host, int port, String bindAddress) throws Exception {
         log.info("Attempting to start iperf3 server on host {}, binding to {}:{}", host, bindAddress, port);
 
-        String remoteLogFile = String.format("/tmp/iperf-server-%s.json", UUID.randomUUID());
+        // Ensure /tmp/iperf3 directory exists
+        String mkdirCommand = "mkdir -p /tmp/iperf3";
+        sshService.executeCommand(mkdirCommand, 3000);
+        
+        String remoteLogFile = String.format("/tmp/iperf3/server-%s.json", UUID.randomUUID());
 
         // Use a more reliable method to start iperf3 and get PID
         // The command uses nohup and redirects output to ensure it doesn't block
         String command = String.format(
-                "nohup iperf3 -s -p %d -B %s -J --logfile %s > /dev/null 2>&1 & echo $!",
+                "nohup iperf3 -s -p %d -B %s -1 -J --logfile %s > /dev/null 2>&1 & echo $!",
                 port,
                 bindAddress,
                 remoteLogFile

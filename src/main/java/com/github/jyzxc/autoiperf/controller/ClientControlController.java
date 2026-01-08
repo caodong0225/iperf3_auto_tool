@@ -51,7 +51,7 @@ public class ClientControlController {
                 RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
                 if (remoteMachinePanel != null && remoteMachinePanel.isConnected()) {
                     log.debug("Auto-refreshing client test instances table...");
-                    handleDiscoverClientTests();
+                    handleDiscoverClientTests(true);
                 }
             }
         });
@@ -139,6 +139,10 @@ public class ClientControlController {
     }
 
     private void handleDiscoverClientTests() {
+        handleDiscoverClientTests(false);
+    }
+    
+    private void handleDiscoverClientTests(boolean isAutoRefresh) {
         RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
         String host = remoteMachinePanel.getHostField().getText();
 
@@ -155,17 +159,27 @@ public class ClientControlController {
                     SwingUtilities.invokeLater(() -> {
                         updateTestTable(instances);
                         log.info("Successfully discovered {} running client tests.", instances.size());
-                        appendClientLog(String.format("发现 %d 个运行中的 iperf3 客户端测试", instances.size()));
-                        for (ClientTestInstance instance : instances) {
-                            appendClientLog(String.format("  - PID: %d, 目标: %s:%d, 状态: %s", 
-                                    instance.getPid(), instance.getTargetHost(), 
-                                    instance.getTargetPort(), instance.getStatus()));
+                        // Only log to console, not to GUI for auto-refresh
+                        if (!isAutoRefresh) {
+                            appendClientLog(String.format("发现 %d 个运行中的 iperf3 客户端测试", instances.size()));
+                            for (ClientTestInstance instance : instances) {
+                                appendClientLog(String.format("  - PID: %d, 目标: %s:%d, 状态: %s", 
+                                        instance.getPid(), instance.getTargetHost(), 
+                                        instance.getTargetPort(), instance.getStatus()));
+                            }
+                        } else {
+                            log.debug("Auto-refresh: Found {} running client test instances", instances.size());
                         }
                     });
                 } catch (Exception e) {
                     log.error("Failed to discover running client tests.", e);
-                    appendClientLog(String.format("发现客户端测试失败: %s", e.getMessage()));
-                    JOptionPane.showMessageDialog(view, "发现客户端测试失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    // Only show error dialog for manual refresh, not auto-refresh
+                    if (!isAutoRefresh) {
+                        appendClientLog(String.format("发现客户端测试失败: %s", e.getMessage()));
+                        JOptionPane.showMessageDialog(view, "发现客户端测试失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    } else {
+                        log.debug("Auto-refresh failed: {}", e.getMessage());
+                    }
                 }
             }
         }.execute();

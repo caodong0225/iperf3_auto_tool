@@ -1,9 +1,11 @@
 package com.github.jyzxc.autoiperf.ui;
 
 import com.github.jyzxc.autoiperf.controller.ClientControlController;
+import com.github.jyzxc.autoiperf.controller.FileManagementController;
 import com.github.jyzxc.autoiperf.controller.ServerControlController;
 import com.github.jyzxc.autoiperf.service.ClientManagerService;
 import com.github.jyzxc.autoiperf.service.ClientTestService;
+import com.github.jyzxc.autoiperf.service.FileManagementService;
 import com.github.jyzxc.autoiperf.service.ServerManagerService;
 import lombok.Getter;
 
@@ -23,10 +25,12 @@ public class MainFrame extends JFrame {
     private ServerManagerService serverManagerService;
     private ClientTestService clientTestService;
     private ClientManagerService clientManagerService;
+    private FileManagementService fileManagementService;
 
     // Controllers
     private ServerControlController serverControlController;
     private ClientControlController clientControlController;
+    private FileManagementController fileManagementController;
 
 
     public MainFrame() {
@@ -44,11 +48,13 @@ public class MainFrame extends JFrame {
         serverManagerService = new ServerManagerService();
         clientTestService = new ClientTestService();
         clientManagerService = new ClientManagerService();
+        fileManagementService = new FileManagementService();
 
         // 2. Instantiate Main Panels
         configPanel = new ConfigPanel();
         resultsPanel = new ResultsPanel();
         statusBar = new StatusBar();
+        FileManagementPanel fileManagementPanel = new FileManagementPanel();
         
         // 3. Instantiate Controllers and link them to Views and Services
         serverControlController = new ServerControlController(
@@ -61,15 +67,27 @@ public class MainFrame extends JFrame {
                 clientManagerService,
                 resultsPanel,
                 configPanel.getServerControlPanel());
+        
+        fileManagementController = new FileManagementController(
+                fileManagementPanel,
+                fileManagementService);
 
         setJMenuBar(createMenuBar());
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, configPanel, resultsPanel);
-        splitPane.setDividerLocation(550);
-        splitPane.setResizeWeight(0.5);
-        splitPane.setOneTouchExpandable(true);
+        // Create tabbed pane
+        JTabbedPane tabbedPane = new JTabbedPane();
+        
+        // Tab 1: Configuration and Results
+        JSplitPane configSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, configPanel, resultsPanel);
+        configSplitPane.setDividerLocation(550);
+        configSplitPane.setResizeWeight(0.5);
+        configSplitPane.setOneTouchExpandable(true);
+        tabbedPane.addTab("服务管理", configSplitPane);
+        
+        // Tab 2: File Management
+        tabbedPane.addTab("文件管理", fileManagementPanel);
 
-        add(splitPane, BorderLayout.CENTER);
+        add(tabbedPane, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
         
         // After frame is visible, ensure proper layout
