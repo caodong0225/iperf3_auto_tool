@@ -42,7 +42,7 @@ public class ServerControlController {
                 RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
                 if (remoteMachinePanel != null && remoteMachinePanel.isConnected()) {
                     log.debug("Auto-refreshing server instances table...");
-                    handleDiscoverInstances();
+                    handleDiscoverInstances(true);
                 }
             }
         });
@@ -118,17 +118,23 @@ public class ServerControlController {
                     SwingUtilities.invokeLater(() -> {
                         updateInstanceTable(instances);
                         log.info("Successfully discovered {} running instances.", instances.size());
-                        appendServerLog(String.format("发现 %d 个运行中的 iperf3 服务实例", instances.size()));
-                        for (IperfServerInstance instance : instances) {
-                            appendServerLog(String.format("  - PID: %d, 端口: %d, 绑定IP: %s, 状态: %s", 
-                                    instance.getPid(), instance.getListeningPort(), 
-                                    instance.getBoundIp(), instance.getStatus()));
+                        // Only log to console, not to GUI for auto-refresh
+                        if (!isAutoRefresh) {
+                            appendServerLog(String.format("发现 %d 个运行中的 iperf3 服务实例", instances.size()));
+                            for (IperfServerInstance instance : instances) {
+                                appendServerLog(String.format("  - PID: %d, 端口: %d, 绑定IP: %s, 状态: %s", 
+                                        instance.getPid(), instance.getListeningPort(), 
+                                        instance.getBoundIp(), instance.getStatus()));
+                            }
                         }
                     });
                 } catch (Exception e) {
                     log.error("Failed to discover running iperf3 instances.", e);
-                    appendServerLog(String.format("发现服务实例失败: %s", e.getMessage()));
-                    JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    // Only show error dialog for manual refresh, not auto-refresh
+                    if (!isAutoRefresh) {
+                        appendServerLog(String.format("发现服务实例失败: %s", e.getMessage()));
+                        JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
                 }
             }
         }.execute();
