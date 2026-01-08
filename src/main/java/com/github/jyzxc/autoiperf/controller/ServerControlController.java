@@ -55,8 +55,10 @@ public class ServerControlController {
             protected void done() {
                 try {
                     List<IperfServerInstance> instances = get();
-                    updateInstanceTable(instances);
-                    log.info("Successfully discovered {} running instances.", instances.size());
+                    SwingUtilities.invokeLater(() -> {
+                        updateInstanceTable(instances);
+                        log.info("Successfully discovered {} running instances.", instances.size());
+                    });
                 } catch (Exception e) {
                     log.error("Failed to discover running iperf3 instances.", e);
                     JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
@@ -165,6 +167,8 @@ public class ServerControlController {
                 instance.getListeningPort(),
                 instance.getCommandLine()
         });
+        view.getServerInstancesTable().revalidate();
+        view.getServerInstancesTable().repaint();
     }
 
     private void updateInstanceTable(List<IperfServerInstance> instances) {
@@ -173,6 +177,8 @@ public class ServerControlController {
         for (IperfServerInstance instance : instances) {
             addInstanceToTable(instance);
         }
+        view.getServerInstancesTable().revalidate();
+        view.getServerInstancesTable().repaint();
     }
 
     private void clearInstanceTable() {

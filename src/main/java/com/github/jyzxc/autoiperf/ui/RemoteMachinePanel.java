@@ -127,8 +127,6 @@ public class RemoteMachinePanel extends JPanel {
         saveButton.addActionListener(e -> handleSaveProfile());
         deleteButton.addActionListener(e -> handleDeleteProfile());
         profileComboBox.addActionListener(e -> handleProfileSelection());
-        
-        nicComboBox.addActionListener(e -> fireConnectionStateChanged());
     }
         
     private void fireConnectionStateChanged() {
