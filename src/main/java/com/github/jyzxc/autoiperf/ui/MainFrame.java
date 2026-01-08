@@ -58,7 +58,6 @@ public class MainFrame extends JFrame {
         
         clientControlController = new ClientControlController(
                 configPanel.getClientControlPanel(),
-                clientTestService,
                 clientManagerService,
                 resultsPanel,
                 configPanel.getServerControlPanel());

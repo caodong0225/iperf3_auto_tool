@@ -36,26 +36,44 @@ public class ClientTestService {
         log.info("Starting client test: target={}:{}, duration={}s, protocol={}", 
                 config.getTargetHost(), config.getTargetPort(), config.getDuration(), config.getProtocol());
 
-        // Build iperf3 client command
-        String command = buildIperf3ClientCommand(config);
-        log.debug("Executing iperf3 client command: {}", command);
-
         String testId = UUID.randomUUID().toString();
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        
+        // Generate JSON file path on remote machine
+        String remoteJsonFile = String.format("/tmp/iperf3/test_%s_%s.json", 
+                timestamp.replace(":", "-").replace(".", "-"), 
+                testId.substring(0, 8));
 
         try {
+            // Ensure /tmp/iperf3 directory exists on remote machine
+            String mkdirCommand = "mkdir -p /tmp/iperf3";
+            sshService.executeCommand(mkdirCommand, 3000);
+            log.debug("Ensured /tmp/iperf3 directory exists");
+
+            // Build iperf3 client command with JSON output to file
+            String command = buildIperf3ClientCommand(config, remoteJsonFile);
+            log.debug("Executing iperf3 client command: {}", command);
+
             // Execute the command with timeout (duration + 10 seconds buffer)
             int timeout = (config.getDuration() + 10) * 1000;
-            String output = sshService.executeCommand(command, timeout);
+            sshService.executeCommand(command, timeout);
+            log.debug("iperf3 command executed, waiting for JSON file to be written...");
 
-            if (output == null || output.trim().isEmpty()) {
-                throw new Exception("iperf3 command returned empty output");
+            // Wait a bit for file to be written
+            Thread.sleep(500);
+
+            // Read the JSON file from remote machine
+            String readJsonCommand = "cat " + remoteJsonFile;
+            String jsonContent = sshService.executeCommand(readJsonCommand, 5000);
+
+            if (jsonContent == null || jsonContent.trim().isEmpty()) {
+                throw new Exception("iperf3 JSON file is empty or could not be read");
             }
 
-            log.debug("iperf3 client output: {}", output);
+            log.debug("iperf3 JSON content: {}", jsonContent);
 
             // Parse JSON result
-            IperfResult iperfResult = gson.fromJson(output, IperfResult.class);
+            IperfResult iperfResult = gson.fromJson(jsonContent, IperfResult.class);
             
             if (iperfResult == null) {
                 throw new Exception("Failed to parse iperf3 JSON output");
@@ -75,14 +93,22 @@ public class ClientTestService {
                     .errorMessage(errorMessage)
                     .build();
 
-            // Save to file
+            // Save to local file
             saveTestResult(result);
 
-            log.info("Client test completed: testId={}, success={}", testId, success);
+            log.info("Client test completed: testId={}, success={}, remoteJsonFile={}", 
+                    testId, success, remoteJsonFile);
             return result;
 
         } catch (Exception e) {
             log.error("Client test failed: {}", e.getMessage(), e);
+            
+            // Try to clean up remote JSON file
+            try {
+                sshService.executeCommand("rm -f " + remoteJsonFile, 2000);
+            } catch (Exception cleanupEx) {
+                log.debug("Could not clean up remote JSON file: {}", cleanupEx.getMessage());
+            }
             
             // Create error result
             ClientTestResult errorResult = ClientTestResult.builder()
@@ -102,13 +128,16 @@ public class ClientTestService {
 
     /**
      * Build the iperf3 client command string based on configuration.
+     * @param config Test configuration
+     * @param jsonFilePath Path to the JSON output file on remote machine
+     * @return Command string
      */
-    private String buildIperf3ClientCommand(ClientTestConfig config) {
+    private String buildIperf3ClientCommand(ClientTestConfig config, String jsonFilePath) {
         StringBuilder cmd = new StringBuilder("iperf3 -c ");
         cmd.append(config.getTargetHost());
         cmd.append(" -p ").append(config.getTargetPort());
         cmd.append(" -t ").append(config.getDuration());
-        cmd.append(" -J"); // JSON output
+        cmd.append(" -J"); // JSON output format
 
         // Protocol
         if ("UDP".equalsIgnoreCase(config.getProtocol())) {
@@ -143,6 +172,9 @@ public class ClientTestService {
         if (config.getSourceBindAddress() != null && !config.getSourceBindAddress().isEmpty()) {
             cmd.append(" -B ").append(config.getSourceBindAddress());
         }
+
+        // Redirect JSON output to file
+        cmd.append(" > ").append(jsonFilePath).append(" 2>&1");
 
         return cmd.toString();
     }

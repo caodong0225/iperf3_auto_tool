@@ -2,10 +2,8 @@ package com.github.jyzxc.autoiperf.controller;
 
 import com.github.jyzxc.autoiperf.model.ClientTestConfig;
 import com.github.jyzxc.autoiperf.model.ClientTestInstance;
-import com.github.jyzxc.autoiperf.model.ClientTestResult;
 import com.github.jyzxc.autoiperf.model.SshProfile;
 import com.github.jyzxc.autoiperf.service.ClientManagerService;
-import com.github.jyzxc.autoiperf.service.ClientTestService;
 import com.github.jyzxc.autoiperf.ui.ClientControlPanel;
 import com.github.jyzxc.autoiperf.ui.RemoteMachinePanel;
 import com.github.jyzxc.autoiperf.ui.ResultsPanel;
@@ -24,18 +22,15 @@ public class ClientControlController {
     private static final Logger log = LoggerFactory.getLogger(ClientControlController.class);
 
     private final ClientControlPanel view;
-    private final ClientTestService clientTestService;
     private final ClientManagerService clientManagerService;
     private final ResultsPanel resultsPanel;
     private final ServerControlPanel serverControlPanel; // Reference to server panel to get selected instance
 
     public ClientControlController(ClientControlPanel view, 
-                                   ClientTestService clientTestService,
                                    ClientManagerService clientManagerService,
                                    ResultsPanel resultsPanel,
                                    ServerControlPanel serverControlPanel) {
         this.view = view;
-        this.clientTestService = clientTestService;
         this.clientManagerService = clientManagerService;
         this.resultsPanel = resultsPanel;
         this.serverControlPanel = serverControlPanel;
@@ -62,6 +57,11 @@ public class ClientControlController {
         view.getStartTestButton().addActionListener(e -> handleStartTest());
         view.getRemoteMachinePanel().addConnectionStateListener(this::handleConnectionStateChange);
         view.getStopTestButton().addActionListener(e -> handleStopOrKillTest(false));
+        
+        // Enable start button when connected
+        view.getRemoteMachinePanel().addConnectionStateListener(isConnected -> {
+            view.getStartTestButton().setEnabled(isConnected);
+        });
         
         // Add listener to server table selection to auto-fill target IP and port
         serverControlPanel.getServerInstancesTable().getSelectionModel().addListSelectionListener(e -> {
@@ -179,43 +179,36 @@ public class ClientControlController {
                 .protocol(protocol)
                 .build();
 
-        new SwingWorker<ClientTestResult, Void>() {
+        new SwingWorker<ClientTestInstance, Void>() {
             @Override
-            protected ClientTestResult doInBackground() throws Exception {
-                return clientTestService.executeTest(remoteMachinePanel.getSshService(), config);
+            protected ClientTestInstance doInBackground() throws Exception {
+                return clientManagerService.startClientTest(
+                        remoteMachinePanel.getSshService(), 
+                        host, 
+                        config);
             }
 
             @Override
             protected void done() {
                 try {
-                    ClientTestResult result = get();
-                    log.info("Client test completed successfully: testId={}", result.getTestId());
-                    
-                    if (result.isSuccess()) {
-                        appendClientLog(String.format("✓ 测试完成: 测试ID=%s", result.getTestId()));
-                        if (result.getClientJsonResult() != null && result.getClientJsonResult().getEnd() != null) {
-                            if (result.getClientJsonResult().getEnd().getSumReceived() != null) {
-                                double bitsPerSecond = result.getClientJsonResult().getEnd().getSumReceived().getBitsPerSecond();
-                                appendClientLog(String.format("  平均速率: %.2f Mbps", bitsPerSecond / 1_000_000));
-                            }
-                        }
-                    } else {
-                        appendClientLog(String.format("✗ 测试失败: %s", result.getErrorMessage()));
-                    }
-                    
-                    // Add to table
+                    ClientTestInstance instance = get();
+                    log.info("Client test started successfully, adding to table: PID={}, Target={}:{}", 
+                            instance.getPid(), instance.getTargetHost(), instance.getTargetPort());
+                    appendClientLog(String.format("✓ 客户端测试已启动: PID=%d, 目标=%s:%d", 
+                            instance.getPid(), instance.getTargetHost(), instance.getTargetPort()));
                     SwingUtilities.invokeLater(() -> {
-                        addTestToTable(result);
+                        addInstanceToTable(instance);
+                        log.info("Instance added to table. Current row count: {}", 
+                                ((DefaultTableModel) view.getClientProcessesTable().getModel()).getRowCount());
                     });
-                    
                     JOptionPane.showMessageDialog(view, 
-                            result.isSuccess() ? "测试完成！" : "测试失败: " + result.getErrorMessage(), 
-                            result.isSuccess() ? "成功" : "错误", 
-                            result.isSuccess() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
+                            "iPerf3 客户端测试已启动！\nPID: " + instance.getPid(), 
+                            "成功", 
+                            JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
-                    log.error("Failed to execute client test.", e);
-                    appendClientLog(String.format("✗ 测试执行失败: %s", e.getMessage()));
-                    JOptionPane.showMessageDialog(view, "测试失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    log.error("Failed to start client test.", e);
+                    appendClientLog(String.format("✗ 启动客户端测试失败: %s", e.getMessage()));
+                    JOptionPane.showMessageDialog(view, "启动测试失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                 } finally {
                     SwingUtilities.invokeLater(() -> {
                         view.getStartTestButton().setEnabled(true);
@@ -260,7 +253,9 @@ public class ClientControlController {
                     get();
                     log.info("Successfully {} test process with PID {}", action.toLowerCase(), pid);
                     appendClientLog(String.format("✓ 成功%s测试进程: PID=%d", action, pid));
-                    ((DefaultTableModel) table.getModel()).removeRow(selectedRow);
+                    SwingUtilities.invokeLater(() -> {
+                        ((DefaultTableModel) table.getModel()).removeRow(selectedRow);
+                    });
                     JOptionPane.showMessageDialog(view, "PID: " + pid + " 已被成功" + action + "。", "操作成功", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
                     log.error("Failed to {} test process with PID {}", action.toLowerCase(), pid, e);
@@ -273,19 +268,19 @@ public class ClientControlController {
         }.execute();
     }
 
-    private void addTestToTable(ClientTestResult result) {
+    private void addInstanceToTable(ClientTestInstance instance) {
         DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
-        String testId = result.getTestId().substring(0, 8); // Short ID
-        String target = result.getConfiguration().getTargetHost() + ":" + result.getConfiguration().getTargetPort();
-        String status = result.isSuccess() ? "完成" : "失败";
-        String resultInfo = result.isSuccess() ? 
-                (result.getClientJsonResult() != null && result.getClientJsonResult().getEnd() != null &&
-                 result.getClientJsonResult().getEnd().getSumReceived() != null ?
-                 String.format("%.2f Mbps", result.getClientJsonResult().getEnd().getSumReceived().getBitsPerSecond() / 1_000_000) :
-                 "成功") :
-                result.getErrorMessage();
+        Object[] rowData = new Object[]{
+                instance.getPid(),
+                instance.getStatus() != null ? instance.getStatus().toString() : "UNKNOWN",
+                instance.getTargetHost() != null ? instance.getTargetHost() : "N/A",
+                instance.getTargetPort(),
+                instance.getCommandLine() != null ? instance.getCommandLine() : "N/A"
+        };
+        model.addRow(rowData);
+        log.info("Added row to table: PID={}, row count now={}", instance.getPid(), model.getRowCount());
         
-        model.addRow(new Object[]{testId, target, status, resultInfo});
+        // Force table refresh
         view.getClientProcessesTable().revalidate();
         view.getClientProcessesTable().repaint();
     }
