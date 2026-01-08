@@ -11,8 +11,7 @@ import java.awt.*;
 public class ClientControlPanel extends JPanel {
 
     private final RemoteMachinePanel remoteMachinePanel;
-    private final JTextField targetHostField;
-    private final JSpinner targetPortSpinner;
+    private final JLabel targetLabel;
     private final JSpinner durationSpinner;
     private final JComboBox<String> protocolComboBox;
     private final JButton startTestButton;
@@ -27,19 +26,19 @@ public class ClientControlPanel extends JPanel {
         JPanel topContainer = new JPanel(new BorderLayout());
         remoteMachinePanel = new RemoteMachinePanel("客户端主机");
         
-        JPanel parametersPanel = new JPanel();
-        parametersPanel.setLayout(new GridBagLayout());
+        JPanel parametersPanel = new JPanel(new GridBagLayout());
         parametersPanel.setBorder(new TitledBorder("测试参数"));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 2, 2, 2);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        gbc.gridx = 0; gbc.gridy = 0; parametersPanel.add(new JLabel("目标主机:"), gbc);
-        gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 1.0; targetHostField = new JTextField("127.0.0.1"); parametersPanel.add(targetHostField, gbc);
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 1; parametersPanel.add(new JLabel("测试目标:"), gbc);
+        gbc.gridx = 1; gbc.gridy = 0; gbc.gridwidth = 3; 
+        targetLabel = new JLabel("请从上方表格选择一个服务实例");
+        targetLabel.setForeground(Color.BLUE);
+        parametersPanel.add(targetLabel, gbc);
 
-        gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0; parametersPanel.add(new JLabel("目标端口:"), gbc);
-        gbc.gridx = 3; gbc.gridy = 0; targetPortSpinner = new JSpinner(new SpinnerNumberModel(5201, 1, 65535, 1)); parametersPanel.add(targetPortSpinner, gbc);
-
+        gbc.gridwidth = 1;
         gbc.gridx = 0; gbc.gridy = 1; parametersPanel.add(new JLabel("时长(秒):"), gbc);
         gbc.gridx = 1; gbc.gridy = 1; durationSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 3600, 1)); parametersPanel.add(durationSpinner, gbc);
 
@@ -48,6 +47,7 @@ public class ClientControlPanel extends JPanel {
 
         JPanel startButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         startTestButton = new JButton("开始新测试");
+        startTestButton.setEnabled(false); // Disabled by default
         startButtonPanel.add(startTestButton);
         
         topContainer.add(remoteMachinePanel, BorderLayout.NORTH);
@@ -56,7 +56,12 @@ public class ClientControlPanel extends JPanel {
 
         // Bottom part: Table of running/recent tests
         String[] columnNames = {"测试ID", "目标", "状态", "结果"};
-        DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
+        DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
         clientProcessesTable = new JTable(tableModel);
         JScrollPane tableScrollPane = new JScrollPane(clientProcessesTable);
         tableScrollPane.setBorder(new TitledBorder("活动/近期测试"));

@@ -36,7 +36,12 @@ public class ServerControlPanel extends JPanel {
 
         // Center part: Table of running instances
         String[] columnNames = {"主机", "监听IP", "端口", "PID", "状态"};
-        DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
+        DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
         serverInstancesTable = new JTable(tableModel);
         JScrollPane tableScrollPane = new JScrollPane(serverInstancesTable);
         tableScrollPane.setBorder(new TitledBorder("活动的服务实例"));
@@ -48,7 +53,6 @@ public class ServerControlPanel extends JPanel {
         bottomPanel.add(stopServerButton);
         bottomPanel.add(killServerButton);
 
-        // Add all parts to the main panel
         add(topPanel, BorderLayout.NORTH);
         add(tableScrollPane, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);

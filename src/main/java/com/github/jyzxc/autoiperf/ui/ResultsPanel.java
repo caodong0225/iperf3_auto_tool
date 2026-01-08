@@ -1,34 +1,33 @@
 package com.github.jyzxc.autoiperf.ui;
 
+import lombok.Getter;
+
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 
-/**
- * Panel on the right to display various results and logs.
- */
+@Getter
 public class ResultsPanel extends JPanel {
-    
-    private final JTextArea logArea;
+
+    private final JTextArea serverLogArea;
+    private final JTextArea clientResultArea;
 
     public ResultsPanel() {
         setLayout(new BorderLayout());
-        setBorder(BorderFactory.createTitledBorder("结果与日志"));
         
-        logArea = new JTextArea("程序日志和测试结果将显示在这里...");
-        logArea.setEditable(false);
-        logArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        
-        JScrollPane scrollPane = new JScrollPane(logArea);
-        add(scrollPane, BorderLayout.CENTER);
-    }
+        serverLogArea = new JTextArea("服务端操作日志将显示在这里...");
+        serverLogArea.setEditable(false);
+        JScrollPane serverScrollPane = new JScrollPane(serverLogArea);
+        serverScrollPane.setBorder(new TitledBorder("服务端日志"));
 
-    public void appendLog(String text) {
-        logArea.append(text + "\n");
-        logArea.setCaretPosition(logArea.getDocument().getLength()); // Auto-scroll
-    }
+        clientResultArea = new JTextArea("客户端测试结果将显示在这里...");
+        clientResultArea.setEditable(false);
+        JScrollPane clientScrollPane = new JScrollPane(clientResultArea);
+        clientScrollPane.setBorder(new TitledBorder("客户端结果"));
 
-    public void setLog(String text) {
-        logArea.setText(text);
-        logArea.setCaretPosition(0);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, serverScrollPane, clientScrollPane);
+        splitPane.setResizeWeight(0.4); 
+
+        add(splitPane, BorderLayout.CENTER);
     }
 }
