@@ -29,6 +29,10 @@ public class SshService {
     }
 
     public String executeCommand(String command) throws JSchException {
+        return executeCommand(command, 30000); // Default 30 second timeout
+    }
+
+    public String executeCommand(String command, int timeoutMs) throws JSchException {
         if (session == null || !session.isConnected()) {
             log.error("Cannot execute command. Session is not connected.");
             throw new JSchException("Session is not connected.");
@@ -45,11 +49,19 @@ public class SshService {
             channel.setOutputStream(outputBuffer);
             channel.setErrStream(errorBuffer);
 
+            log.debug("Executing command with {}ms timeout: {}", timeoutMs, command);
             channel.connect();
 
+            long startTime = System.currentTimeMillis();
             while (!channel.isClosed()) {
                 try {
                     Thread.sleep(100);
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    if (elapsed > timeoutMs) {
+                        log.error("Command execution timed out after {}ms. Command: {}", elapsed, command);
+                        channel.disconnect();
+                        throw new JSchException("Command execution timed out after " + elapsed + "ms");
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.warn("Command execution was interrupted.", e);

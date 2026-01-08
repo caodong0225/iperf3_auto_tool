@@ -109,7 +109,134 @@ public class ServerControlController {
                     JOptionPane.showMessageDialog(view, "iPerf3 服务已成功启动！\nPID: " + instance.getPid(), "成功", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
                     log.error("Failed to start iperf3 server.", e);
-                    JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    
+                    // Check if it's a port in use exception
+                    Throwable cause = e;
+                    if (e instanceof java.util.concurrent.ExecutionException) {
+                        cause = e.getCause();
+                    }
+                    
+                    if (cause instanceof com.github.jyzxc.autoiperf.model.PortInUseByIperfException) {
+                        com.github.jyzxc.autoiperf.model.PortInUseByIperfException portException = 
+                                (com.github.jyzxc.autoiperf.model.PortInUseByIperfException) cause;
+                        
+                        // Show dialog asking user if they want to kill the process
+                        int option = JOptionPane.showConfirmDialog(
+                                view,
+                                portException.getMessage() + "\n\n是否需要强制终止该进程并重试启动？",
+                                "端口被占用",
+                                JOptionPane.YES_NO_OPTION,
+                                JOptionPane.WARNING_MESSAGE
+                        );
+                        
+                        if (option == JOptionPane.YES_OPTION) {
+                            // User wants to kill the process and retry
+                            handlePortConflictAndRetry(portException.getPid(), portException.getProcessName());
+                            return; // Don't reset button state, retry will handle it
+                        } else {
+                            // User cancelled
+                            JOptionPane.showMessageDialog(view, "操作已取消。", "提示", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                    } else {
+                        // Other errors
+                        JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
+                } finally {
+                    SwingUtilities.invokeLater(() -> {
+                        view.getStartServerButton().setEnabled(true);
+                        view.getStartServerButton().setText("开启新服务");
+                    });
+                }
+            }
+        }.execute();
+    }
+
+    private void handlePortConflictAndRetry(String blockingPid, String processName) {
+        log.info("User chose to kill blocking process: PID={}, Process={}", blockingPid, processName);
+        RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+        String host = remoteMachinePanel.getHostField().getText();
+        int port = (Integer) view.getPortSpinner().getValue();
+        String selectedIp = remoteMachinePanel.getSelectedNicIp();
+        
+        view.getStartServerButton().setText("正在终止占用进程...");
+        
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                // Kill the blocking process
+                try {
+                    String killCommand = "kill -9 " + blockingPid;
+                    remoteMachinePanel.getSshService().executeCommand(killCommand, 3000);
+                    log.info("Successfully killed blocking process PID: {}", blockingPid);
+                    // Wait a bit for the port to be released
+                    Thread.sleep(500);
+                } catch (Exception e) {
+                    log.error("Failed to kill blocking process: {}", e.getMessage());
+                    throw new Exception("无法终止占用进程: " + e.getMessage());
+                }
+                return null;
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    log.info("Blocking process killed, retrying server start...");
+                    // Retry starting the server
+                    retryStartServer(host, port, selectedIp);
+                } catch (Exception e) {
+                    log.error("Failed to kill blocking process", e);
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(view, 
+                                "无法终止占用进程: \n" + e.getMessage(), 
+                                "错误", 
+                                JOptionPane.ERROR_MESSAGE);
+                        view.getStartServerButton().setEnabled(true);
+                        view.getStartServerButton().setText("开启新服务");
+                    });
+                }
+            }
+        }.execute();
+    }
+    
+    private void retryStartServer(String host, int port, String selectedIp) {
+        RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+        view.getStartServerButton().setText("正在启动...");
+        
+        new SwingWorker<IperfServerInstance, Void>() {
+            @Override
+            protected IperfServerInstance doInBackground() throws Exception {
+                return service.startServer(remoteMachinePanel.getSshService(), host, port, selectedIp);
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    IperfServerInstance instance = get();
+                    log.info("Server started successfully after retry, adding to table: PID={}, Port={}, BindIP={}", 
+                            instance.getPid(), instance.getListeningPort(), instance.getBoundIp());
+                    SwingUtilities.invokeLater(() -> {
+                        addInstanceToTable(instance);
+                        log.info("Instance added to table. Current row count: {}", 
+                                ((DefaultTableModel) view.getServerInstancesTable().getModel()).getRowCount());
+                    });
+                    JOptionPane.showMessageDialog(view, "iPerf3 服务已成功启动！\nPID: " + instance.getPid(), "成功", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception e) {
+                    log.error("Failed to start iperf3 server after retry.", e);
+                    Throwable cause = e;
+                    if (e instanceof java.util.concurrent.ExecutionException) {
+                        cause = e.getCause();
+                    }
+                    
+                    if (cause instanceof com.github.jyzxc.autoiperf.model.PortInUseByIperfException) {
+                        // Port still in use after kill attempt
+                        JOptionPane.showMessageDialog(view, 
+                                "端口仍然被占用，启动失败。\n" + cause.getMessage(), 
+                                "错误", 
+                                JOptionPane.ERROR_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
                 } finally {
                     SwingUtilities.invokeLater(() -> {
                         view.getStartServerButton().setEnabled(true);
