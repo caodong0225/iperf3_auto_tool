@@ -25,6 +25,60 @@ public class ServerControlController {
 
     private void addListeners() {
         view.getStartServerButton().addActionListener(e -> handleStartServer());
+        view.getRemoteMachinePanel().addConnectionStateListener(this::handleConnectionStateChange);
+    }
+
+    private void handleConnectionStateChange(boolean isConnected) {
+        if (isConnected) {
+            log.info("Connection established, discovering running instances...");
+            handleDiscoverInstances();
+        } else {
+            log.info("Connection lost, clearing instance table.");
+            clearInstanceTable();
+        }
+    }
+
+    private void handleDiscoverInstances() {
+        RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+        String host = remoteMachinePanel.getHostField().getText();
+
+        new SwingWorker<java.util.List<IperfServerInstance>, Void>() {
+            @Override
+protected java.util.List<IperfServerInstance> doInBackground() throws Exception {
+                return service.discoverRunningInstances(remoteMachinePanel.getSshService(), host);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    java.util.List<IperfServerInstance> instances = get();
+                    updateInstanceTable(instances);
+                    log.info("Successfully discovered {} running instances.", instances.size());
+                } catch (Exception e) {
+                    log.error("Failed to discover running iperf3 instances.", e);
+                    JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void updateInstanceTable(java.util.List<IperfServerInstance> instances) {
+        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        model.setRowCount(0); // Clear table
+        for (IperfServerInstance instance : instances) {
+            model.addRow(new Object[]{
+                    instance.getRemoteHost(),
+                    instance.getBoundIp(),
+                    instance.getListeningPort(),
+                    instance.getPid(),
+                    instance.getStatus()
+            });
+        }
+    }
+
+    private void clearInstanceTable() {
+        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        model.setRowCount(0); // Clear table
     }
 
     private void handleStartServer() {
