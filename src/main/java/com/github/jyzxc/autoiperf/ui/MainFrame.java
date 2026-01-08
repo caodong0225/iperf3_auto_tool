@@ -43,7 +43,10 @@ public class MainFrame extends JFrame {
         statusBar = new StatusBar();
         
         // 3. Instantiate Controllers and link them to Views and Services
-        serverControlController = new ServerControlController(configPanel.getServerControlPanel(), serverManagerService);
+        serverControlController = new ServerControlController(
+                configPanel.getServerControlPanel(), 
+                serverManagerService,
+                resultsPanel);
         // Other controllers will be initialized here later
 
         setJMenuBar(createMenuBar());

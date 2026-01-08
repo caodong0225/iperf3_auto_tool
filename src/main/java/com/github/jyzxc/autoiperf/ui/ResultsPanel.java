@@ -15,10 +15,15 @@ public class ResultsPanel extends JPanel {
     public ResultsPanel() {
         setLayout(new BorderLayout());
         
-        serverLogArea = new JTextArea("服务端操作日志将显示在这里...");
+        serverLogArea = new JTextArea();
         serverLogArea.setEditable(false);
+        serverLogArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        serverLogArea.setLineWrap(true);
+        serverLogArea.setWrapStyleWord(true);
+        serverLogArea.setText("服务端操作日志将显示在这里...\n");
         JScrollPane serverScrollPane = new JScrollPane(serverLogArea);
         serverScrollPane.setBorder(new TitledBorder("服务端日志"));
+        serverScrollPane.setPreferredSize(new Dimension(400, 200));
 
         clientResultArea = new JTextArea("客户端测试结果将显示在这里...");
         clientResultArea.setEditable(false);

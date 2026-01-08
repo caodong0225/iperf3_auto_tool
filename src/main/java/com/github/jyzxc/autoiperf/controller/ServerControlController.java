@@ -3,6 +3,7 @@ package com.github.jyzxc.autoiperf.controller;
 import com.github.jyzxc.autoiperf.model.IperfServerInstance;
 import com.github.jyzxc.autoiperf.service.ServerManagerService;
 import com.github.jyzxc.autoiperf.ui.RemoteMachinePanel;
+import com.github.jyzxc.autoiperf.ui.ResultsPanel;
 import com.github.jyzxc.autoiperf.ui.ServerControlPanel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,11 +19,30 @@ public class ServerControlController {
 
     private final ServerControlPanel view;
     private final ServerManagerService service;
+    private final ResultsPanel resultsPanel;
 
-    public ServerControlController(ServerControlPanel view, ServerManagerService service) {
+    public ServerControlController(ServerControlPanel view, ServerManagerService service, ResultsPanel resultsPanel) {
         this.view = view;
         this.service = service;
+        this.resultsPanel = resultsPanel;
         addListeners();
+    }
+    
+    /**
+     * Append log message to the server log area in the results panel.
+     * @param message The log message to append
+     */
+    private void appendServerLog(String message) {
+        if (resultsPanel != null && resultsPanel.getServerLogArea() != null) {
+            SwingUtilities.invokeLater(() -> {
+                JTextArea logArea = resultsPanel.getServerLogArea();
+                String timestamp = java.time.LocalDateTime.now().format(
+                        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                logArea.append(String.format("[%s] %s%n", timestamp, message));
+                // Auto-scroll to bottom
+                logArea.setCaretPosition(logArea.getDocument().getLength());
+            });
+        }
     }
 
     private void addListeners() {
@@ -34,10 +54,14 @@ public class ServerControlController {
 
     private void handleConnectionStateChange(boolean isConnected) {
         if (isConnected) {
+            String host = view.getRemoteMachinePanel().getHostField().getText();
             log.info("Connection established, discovering running instances...");
+            appendServerLog(String.format("已连接到服务端主机: %s", host));
+            appendServerLog("正在发现运行中的 iperf3 实例...");
             handleDiscoverInstances();
         } else {
             log.info("Connection lost, clearing instance table.");
+            appendServerLog("连接已断开，清空实例列表");
             clearInstanceTable();
         }
     }
@@ -59,9 +83,16 @@ public class ServerControlController {
                     SwingUtilities.invokeLater(() -> {
                         updateInstanceTable(instances);
                         log.info("Successfully discovered {} running instances.", instances.size());
+                        appendServerLog(String.format("发现 %d 个运行中的 iperf3 服务实例", instances.size()));
+                        for (IperfServerInstance instance : instances) {
+                            appendServerLog(String.format("  - PID: %d, 端口: %d, 绑定IP: %s, 状态: %s", 
+                                    instance.getPid(), instance.getListeningPort(), 
+                                    instance.getBoundIp(), instance.getStatus()));
+                        }
                     });
                 } catch (Exception e) {
                     log.error("Failed to discover running iperf3 instances.", e);
+                    appendServerLog(String.format("发现服务实例失败: %s", e.getMessage()));
                     JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                 }
             }
@@ -86,6 +117,7 @@ public class ServerControlController {
         int port = (Integer) view.getPortSpinner().getValue();
         String host = remoteMachinePanel.getHostField().getText();
 
+        appendServerLog(String.format("开始启动 iperf3 服务端: 主机=%s, 绑定IP=%s, 端口=%d", host, selectedIp, port));
         view.getStartServerButton().setEnabled(false);
         view.getStartServerButton().setText("正在启动...");
 
@@ -101,6 +133,8 @@ public class ServerControlController {
                     IperfServerInstance instance = get();
                     log.info("Server started successfully, adding to table: PID={}, Port={}, BindIP={}", 
                             instance.getPid(), instance.getListeningPort(), instance.getBoundIp());
+                    appendServerLog(String.format("✓ iperf3 服务启动成功: PID=%d, 端口=%d, 绑定IP=%s", 
+                            instance.getPid(), instance.getListeningPort(), instance.getBoundIp()));
                     SwingUtilities.invokeLater(() -> {
                         addInstanceToTable(instance);
                         log.info("Instance added to table. Current row count: {}", 
@@ -120,6 +154,8 @@ public class ServerControlController {
                         com.github.jyzxc.autoiperf.model.PortInUseByIperfException portException = 
                                 (com.github.jyzxc.autoiperf.model.PortInUseByIperfException) cause;
                         
+                        appendServerLog(String.format("✗ 端口被占用: %s", portException.getMessage()));
+                        
                         // Show dialog asking user if they want to kill the process
                         int option = JOptionPane.showConfirmDialog(
                                 view,
@@ -131,14 +167,18 @@ public class ServerControlController {
                         
                         if (option == JOptionPane.YES_OPTION) {
                             // User wants to kill the process and retry
+                            appendServerLog(String.format("用户选择终止占用进程 (PID: %s, 进程: %s)", 
+                                    portException.getPid(), portException.getProcessName()));
                             handlePortConflictAndRetry(portException.getPid(), portException.getProcessName());
                             return; // Don't reset button state, retry will handle it
                         } else {
                             // User cancelled
+                            appendServerLog("用户取消了操作");
                             JOptionPane.showMessageDialog(view, "操作已取消。", "提示", JOptionPane.INFORMATION_MESSAGE);
                         }
                     } else {
                         // Other errors
+                        appendServerLog(String.format("✗ 启动服务失败: %s", e.getMessage()));
                         JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                     }
                 } finally {
@@ -153,6 +193,7 @@ public class ServerControlController {
 
     private void handlePortConflictAndRetry(String blockingPid, String processName) {
         log.info("User chose to kill blocking process: PID={}, Process={}", blockingPid, processName);
+        appendServerLog(String.format("正在终止占用进程: PID=%s, 进程名=%s", blockingPid, processName));
         RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
         String host = remoteMachinePanel.getHostField().getText();
         int port = (Integer) view.getPortSpinner().getValue();
@@ -182,10 +223,13 @@ public class ServerControlController {
                 try {
                     get(); // Check for exceptions
                     log.info("Blocking process killed, retrying server start...");
+                    appendServerLog(String.format("✓ 占用进程已终止 (PID: %s)", blockingPid));
+                    appendServerLog("正在重试启动 iperf3 服务...");
                     // Retry starting the server
                     retryStartServer(host, port, selectedIp);
                 } catch (Exception e) {
                     log.error("Failed to kill blocking process", e);
+                    appendServerLog(String.format("✗ 无法终止占用进程: %s", e.getMessage()));
                     SwingUtilities.invokeLater(() -> {
                         JOptionPane.showMessageDialog(view, 
                                 "无法终止占用进程: \n" + e.getMessage(), 
@@ -215,6 +259,8 @@ public class ServerControlController {
                     IperfServerInstance instance = get();
                     log.info("Server started successfully after retry, adding to table: PID={}, Port={}, BindIP={}", 
                             instance.getPid(), instance.getListeningPort(), instance.getBoundIp());
+                    appendServerLog(String.format("✓ 重试启动成功: PID=%d, 端口=%d, 绑定IP=%s", 
+                            instance.getPid(), instance.getListeningPort(), instance.getBoundIp()));
                     SwingUtilities.invokeLater(() -> {
                         addInstanceToTable(instance);
                         log.info("Instance added to table. Current row count: {}", 
@@ -230,11 +276,13 @@ public class ServerControlController {
                     
                     if (cause instanceof com.github.jyzxc.autoiperf.model.PortInUseByIperfException) {
                         // Port still in use after kill attempt
+                        appendServerLog(String.format("✗ 重试失败: 端口仍然被占用 - %s", cause.getMessage()));
                         JOptionPane.showMessageDialog(view, 
                                 "端口仍然被占用，启动失败。\n" + cause.getMessage(), 
                                 "错误", 
                                 JOptionPane.ERROR_MESSAGE);
                     } else {
+                        appendServerLog(String.format("✗ 重试启动失败: %s", e.getMessage()));
                         JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                     }
                 } finally {
@@ -260,6 +308,7 @@ public class ServerControlController {
         int pid = (Integer) table.getModel().getValueAt(selectedRow, 0);
         String action = force ? "强制终止" : "停止";
         log.info("User requested to {} server with PID {}", action.toLowerCase(), pid);
+        appendServerLog(String.format("用户请求%s服务: PID=%d", action, pid));
 
         view.getStopServerButton().setEnabled(false);
         view.getKillServerButton().setEnabled(false);
@@ -281,10 +330,12 @@ public class ServerControlController {
                 try {
                     get(); // Check for exceptions from the background task
                     log.info("Successfully {} process with PID {}", action.toLowerCase(), pid);
+                    appendServerLog(String.format("✓ 成功%s进程: PID=%d", action, pid));
                     ((DefaultTableModel) table.getModel()).removeRow(selectedRow);
                     JOptionPane.showMessageDialog(view, "PID: " + pid + " 已被成功" + action + "。", "操作成功", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
                     log.error("Failed to {} process with PID {}", action.toLowerCase(), pid, e);
+                    appendServerLog(String.format("✗ %s进程失败: PID=%d, 错误=%s", action, pid, e.getMessage()));
                     JOptionPane.showMessageDialog(view, action + " PID: " + pid + " 失败: \n" + e.getMessage(), "操作失败", JOptionPane.ERROR_MESSAGE);
                 } finally {
                     view.getStopServerButton().setEnabled(true);
