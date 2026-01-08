@@ -34,21 +34,72 @@ public class ServerManagerService {
         String output = sshService.executeCommand(command);
         if (output == null || output.trim().isEmpty() || !output.trim().matches("\\d+")) {
             log.error("Failed to start iperf3 server or get a valid PID. Output: {}", output);
-            throw new Exception("Failed to start iperf3 server. Check remote logs. Output: " + output);
+            // Attempt to read the log file for a more specific error
+            String errorLog = sshService.executeCommand("cat " + remoteLogFile);
+            sshService.executeCommand("rm " + remoteLogFile); // Cleanup
+            throw new Exception("Failed to get PID for iperf3. Error log: " + errorLog);
         }
 
         String pidStr = output.trim();
-        log.info("iPerf3 server started successfully on host {} with PID: {}", host, pidStr);
+        log.info("iPerf3 server process created with PID: {}. Verifying startup...", pidStr);
 
-        return IperfServerInstance.builder()
-                .instanceId(UUID.randomUUID().toString())
-                .remoteHost(host)
-                .boundIp(bindAddress)
-                .listeningPort(port)
-                .pid(Integer.parseInt(pidStr))
-                .status(IperfServerInstance.ServerStatus.RUNNING)
-                .build();
+        // Polling mechanism to verify server is actually ready and not in an error state.
+        long startTime = System.currentTimeMillis();
+        long timeout = 3000; // 3 seconds timeout
+
+        while (System.currentTimeMillis() - startTime < timeout) {
+            Thread.sleep(300); // Poll every 300ms
+
+            // Check if the process is still alive
+            String psCheckOutput = sshService.executeCommand("ps -p " + pidStr);
+            if (!psCheckOutput.contains(pidStr)) {
+                // Process died. Check the log file for the reason.
+                String errorLog = sshService.executeCommand("cat " + remoteLogFile);
+                sshService.executeCommand("rm " + remoteLogFile);
+                if(errorLog != null && errorLog.contains("\"error\"")) {
+                     throw new Exception("iPerf3 server failed to start: " + extractErrorFromJson(errorLog));
+                }
+                throw new Exception("iPerf3 process with PID " + pidStr + " died unexpectedly.");
+            }
+            
+            // Check if the server is listening on the port. This is a more reliable check.
+             String listenCheckCommand = String.format("ss -tlpn | grep ':%d'", port);
+             String listenCheckOutput = sshService.executeCommand(listenCheckCommand);
+             if (listenCheckOutput != null && listenCheckOutput.contains(pidStr)) {
+                 log.info("Verified: PID {} is listening on port {}. Server started successfully.", pidStr, port);
+                 // Success condition
+                 return IperfServerInstance.builder()
+                         .instanceId(UUID.randomUUID().toString())
+                         .remoteHost(host)
+                         .boundIp(bindAddress)
+                         .listeningPort(port)
+                         .pid(Integer.parseInt(pidStr))
+                         .status(IperfServerInstance.ServerStatus.RUNNING)
+                         .build();
+             }
+        }
+        
+        // If we reach here, it's a timeout.
+        log.error("Server startup verification timed out after {}ms.", timeout);
+        // Cleanup attempt
+        sshService.executeCommand("kill " + pidStr);
+        sshService.executeCommand("rm " + remoteLogFile);
+        throw new Exception("iPerf3 server startup timed out. Process was killed.");
     }
+
+    private String extractErrorFromJson(String json) {
+        try {
+            Pattern pattern = Pattern.compile("\"error\"\\s*:\\s*\"([^\"]+)\"");
+            Matcher matcher = pattern.matcher(json);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse error from JSON, returning raw content.", e);
+        }
+        return json;
+    }
+
 
     public List<IperfServerInstance> discoverRunningInstances(SshService sshService, String host) throws Exception {
         log.info("Discovering running iperf3 instances on host: {}", host);
