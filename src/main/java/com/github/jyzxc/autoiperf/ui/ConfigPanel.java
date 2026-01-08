@@ -23,15 +23,29 @@ public class ConfigPanel extends JPanel {
     private void initComponents() {
         JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         mainSplitPane.setResizeWeight(0.5);
+        mainSplitPane.setDividerSize(5);
+        mainSplitPane.setOneTouchExpandable(true);
 
         // The top part for Server Management
         serverControlPanel = new ServerControlPanel();
+        // Ensure server panel has minimum size
+        serverControlPanel.setMinimumSize(new Dimension(400, 300));
 
         // The bottom part for Client Management
         clientControlPanel = new ClientControlPanel();
+        clientControlPanel.setMinimumSize(new Dimension(400, 300));
 
         mainSplitPane.setTopComponent(serverControlPanel);
         mainSplitPane.setBottomComponent(clientControlPanel);
+        
+        // Set initial divider location to give both panels equal space
+        // This will be set after the frame is visible
+        SwingUtilities.invokeLater(() -> {
+            int totalHeight = mainSplitPane.getHeight();
+            if (totalHeight > 0) {
+                mainSplitPane.setDividerLocation(totalHeight / 2);
+            }
+        });
 
         add(mainSplitPane, BorderLayout.CENTER);
     }

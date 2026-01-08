@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.awt.Container;
 import java.util.List;
 
 public class ServerControlController {
@@ -98,14 +99,22 @@ public class ServerControlController {
             protected void done() {
                 try {
                     IperfServerInstance instance = get();
-                    addInstanceToTable(instance);
+                    log.info("Server started successfully, adding to table: PID={}, Port={}, BindIP={}", 
+                            instance.getPid(), instance.getListeningPort(), instance.getBoundIp());
+                    SwingUtilities.invokeLater(() -> {
+                        addInstanceToTable(instance);
+                        log.info("Instance added to table. Current row count: {}", 
+                                ((DefaultTableModel) view.getServerInstancesTable().getModel()).getRowCount());
+                    });
                     JOptionPane.showMessageDialog(view, "iPerf3 服务已成功启动！\nPID: " + instance.getPid(), "成功", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
                     log.error("Failed to start iperf3 server.", e);
                     JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                 } finally {
-                    view.getStartServerButton().setEnabled(true);
-                    view.getStartServerButton().setText("开启新服务");
+                    SwingUtilities.invokeLater(() -> {
+                        view.getStartServerButton().setEnabled(true);
+                        view.getStartServerButton().setText("开启新服务");
+                    });
                 }
             }
         }.execute();
@@ -160,35 +169,103 @@ public class ServerControlController {
 
     private void addInstanceToTable(IperfServerInstance instance) {
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
-        model.addRow(new Object[]{
+        Object[] rowData = new Object[]{
                 instance.getPid(),
-                instance.getStatus(),
-                instance.getBoundIp(),
+                instance.getStatus() != null ? instance.getStatus().toString() : "UNKNOWN",
+                instance.getBoundIp() != null ? instance.getBoundIp() : "N/A",
                 instance.getListeningPort(),
-                instance.getCommandLine()
-        });
+                instance.getCommandLine() != null ? instance.getCommandLine() : "N/A"
+        };
+        model.addRow(rowData);
+        log.info("Added row to table: PID={}, Status={}, Port={}, BindIP={}, row count now={}", 
+                instance.getPid(), 
+                instance.getStatus(),
+                instance.getListeningPort(),
+                instance.getBoundIp(),
+                model.getRowCount());
+        
+        // Force table refresh
         view.getServerInstancesTable().revalidate();
         view.getServerInstancesTable().repaint();
     }
 
     private void updateInstanceTable(List<IperfServerInstance> instances) {
-        log.debug("Attempting to update table with {} instances.", instances.size());
+        log.info("Attempting to update table with {} instances.", instances.size());
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
         
-        log.debug("Table model row count before update: {}", model.getRowCount());
+        log.info("Table model row count before update: {}", model.getRowCount());
         model.setRowCount(0); // Clear table
-        log.debug("Table model row count after clearing: {}", model.getRowCount());
+        log.info("Table model row count after clearing: {}", model.getRowCount());
 
         for (IperfServerInstance instance : instances) {
-            log.debug("Adding instance to table: PID={}", instance.getPid());
+            log.info("Adding instance to table: PID={}, Status={}, Port={}, BindIP={}", 
+                    instance.getPid(), instance.getStatus(), instance.getListeningPort(), instance.getBoundIp());
             addInstanceToTable(instance);
         }
         
-        log.debug("Table model row count after adding all instances: {}", model.getRowCount());
+        log.info("Table model row count after adding all instances: {}", model.getRowCount());
         
-        // Force UI refresh
-        view.getServerInstancesTable().revalidate();
-        view.getServerInstancesTable().repaint();
+        // Force UI refresh - already on EDT, but ensure visibility
+        JTable table = view.getServerInstancesTable();
+        table.revalidate();
+        table.repaint();
+        
+        // Ensure table columns are visible by resetting column widths if needed
+        if (model.getRowCount() > 0) {
+            table.getColumnModel().getColumn(0).setPreferredWidth(80);  // PID
+            table.getColumnModel().getColumn(1).setPreferredWidth(80);  // 状态
+            table.getColumnModel().getColumn(2).setPreferredWidth(120); // 监听IP
+            table.getColumnModel().getColumn(3).setPreferredWidth(80);  // 端口
+            table.getColumnModel().getColumn(4).setPreferredWidth(300); // 完整命令
+            table.sizeColumnsToFit(-1);
+        }
+        
+        // Log table visibility and size for debugging
+        log.info("Table is visible: {}, showing: {}, size: {}x{}, row height: {}", 
+                table.isVisible(), 
+                table.isShowing(),
+                table.getWidth(),
+                table.getHeight(),
+                table.getRowHeight());
+        
+        // Log scroll pane info
+        Container parent = table.getParent();
+        if (parent instanceof JViewport) {
+            JViewport viewport = (JViewport) parent;
+            log.info("Viewport size: {}x{}", viewport.getWidth(), viewport.getHeight());
+            Container scrollPane = viewport.getParent();
+            if (scrollPane instanceof JScrollPane) {
+                JScrollPane sp = (JScrollPane) scrollPane;
+                log.info("ScrollPane size: {}x{}, visible: {}, preferred: {}x{}, min: {}x{}", 
+                        sp.getWidth(),
+                        sp.getHeight(),
+                        sp.isVisible(),
+                        sp.getPreferredSize().width,
+                        sp.getPreferredSize().height,
+                        sp.getMinimumSize().width,
+                        sp.getMinimumSize().height);
+            }
+        }
+        
+        // Force layout update if table height is 0
+        if (table.getHeight() == 0) {
+            log.warn("Table height is 0, forcing layout update...");
+            SwingUtilities.invokeLater(() -> {
+                Container root = table.getTopLevelAncestor();
+                if (root != null) {
+                    root.validate();
+                    root.repaint();
+                }
+                // Also validate the scroll pane
+                if (parent instanceof JViewport) {
+                    Container scrollPane = parent.getParent();
+                    if (scrollPane instanceof JScrollPane) {
+                        ((JScrollPane) scrollPane).validate();
+                        ((JScrollPane) scrollPane).repaint();
+                    }
+                }
+            });
+        }
     }
 
     private void clearInstanceTable() {

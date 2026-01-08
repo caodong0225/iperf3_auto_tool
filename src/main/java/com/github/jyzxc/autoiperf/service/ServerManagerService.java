@@ -67,6 +67,8 @@ public class ServerManagerService {
              String listenCheckOutput = sshService.executeCommand(listenCheckCommand);
              if (listenCheckOutput != null && listenCheckOutput.contains(pidStr)) {
                  log.info("Verified: PID {} is listening on port {}. Server started successfully.", pidStr, port);
+                 // Build command line for display
+                 String cmdLine = String.format("iperf3 -s -p %d -B %s", port, bindAddress);
                  // Success condition
                  return IperfServerInstance.builder()
                          .instanceId(UUID.randomUUID().toString())
@@ -74,6 +76,7 @@ public class ServerManagerService {
                          .boundIp(bindAddress)
                          .listeningPort(port)
                          .pid(Integer.parseInt(pidStr))
+                         .commandLine(cmdLine)
                          .status(IperfServerInstance.ServerStatus.RUNNING)
                          .build();
              }
@@ -140,15 +143,16 @@ public class ServerManagerService {
     
                     log.info("Discovered iperf3 server instance -> PID: {}, Port: {}, Bind Address: {}", pid, port, bindAddress);
     
-                                    IperfServerInstance instance = IperfServerInstance.builder()
-                                            .instanceId(UUID.randomUUID().toString())
-                                            .remoteHost(host)
-                                            .pid(pid)
-                                            .commandLine(cmdLine)
-                                            .listeningPort(port)
-                                            .boundIp(bindAddress)
-                                            .status(IperfServerInstance.ServerStatus.RUNNING)
-                                            .build();                    discoveredInstances.add(instance);
+                    IperfServerInstance instance = IperfServerInstance.builder()
+                            .instanceId(UUID.randomUUID().toString())
+                            .remoteHost(host)
+                            .pid(pid)
+                            .commandLine(cmdLine)
+                            .listeningPort(port)
+                            .boundIp(bindAddress)
+                            .status(IperfServerInstance.ServerStatus.RUNNING)
+                            .build();
+                    discoveredInstances.add(instance);
     
                 } catch (NumberFormatException e) {
                     log.warn("Failed to parse PID from pgrep output line: '{}'", line, e);

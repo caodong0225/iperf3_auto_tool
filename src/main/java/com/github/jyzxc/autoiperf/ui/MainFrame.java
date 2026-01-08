@@ -50,9 +50,22 @@ public class MainFrame extends JFrame {
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, configPanel, resultsPanel);
         splitPane.setDividerLocation(550);
+        splitPane.setResizeWeight(0.5);
+        splitPane.setOneTouchExpandable(true);
 
         add(splitPane, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
+        
+        // After frame is visible, ensure proper layout
+        SwingUtilities.invokeLater(() -> {
+            validate();
+            repaint();
+            // Force ConfigPanel's internal split pane to layout properly
+            if (configPanel != null && configPanel.getServerControlPanel() != null) {
+                configPanel.getServerControlPanel().validate();
+                configPanel.getServerControlPanel().repaint();
+            }
+        });
     }
 
     private JMenuBar createMenuBar() {
