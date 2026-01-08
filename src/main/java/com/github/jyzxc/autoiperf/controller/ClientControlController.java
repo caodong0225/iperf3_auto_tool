@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -25,6 +27,7 @@ public class ClientControlController {
     private final ClientManagerService clientManagerService;
     private final ResultsPanel resultsPanel;
     private final ServerControlPanel serverControlPanel; // Reference to server panel to get selected instance
+    private Timer refreshTimer;
 
     public ClientControlController(ClientControlPanel view, 
                                    ClientManagerService clientManagerService,
@@ -35,6 +38,36 @@ public class ClientControlController {
         this.resultsPanel = resultsPanel;
         this.serverControlPanel = serverControlPanel;
         addListeners();
+        startAutoRefresh();
+    }
+    
+    /**
+     * Start automatic refresh timer that updates the table every 10 seconds.
+     */
+    private void startAutoRefresh() {
+        refreshTimer = new Timer(10000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+                if (remoteMachinePanel != null && remoteMachinePanel.isConnected()) {
+                    log.debug("Auto-refreshing client test instances table...");
+                    handleDiscoverClientTests();
+                }
+            }
+        });
+        refreshTimer.setRepeats(true);
+        refreshTimer.start();
+        log.info("Started auto-refresh timer for client test instances (every 10 seconds)");
+    }
+    
+    /**
+     * Stop the auto-refresh timer.
+     */
+    public void stopAutoRefresh() {
+        if (refreshTimer != null) {
+            refreshTimer.stop();
+            log.info("Stopped auto-refresh timer for client test instances");
+        }
     }
 
     /**
@@ -57,11 +90,6 @@ public class ClientControlController {
         view.getStartTestButton().addActionListener(e -> handleStartTest());
         view.getRemoteMachinePanel().addConnectionStateListener(this::handleConnectionStateChange);
         view.getStopTestButton().addActionListener(e -> handleStopOrKillTest(false));
-        
-        // Enable start button when connected
-        view.getRemoteMachinePanel().addConnectionStateListener(isConnected -> {
-            view.getStartTestButton().setEnabled(isConnected);
-        });
         
         // Add listener to server table selection to auto-fill target IP and port
         serverControlPanel.getServerInstancesTable().getSelectionModel().addListSelectionListener(e -> {
@@ -96,11 +124,17 @@ public class ClientControlController {
             log.info("Client connection established, discovering running client tests...");
             appendClientLog(String.format("已连接到客户端主机: %s", host));
             appendClientLog("正在发现运行中的 iperf3 客户端测试...");
+            // Enable start button when connected
+            view.getStartTestButton().setEnabled(true);
             handleDiscoverClientTests();
+            // Timer is already started in constructor, it will check connection status
         } else {
             log.info("Client connection lost, clearing test table.");
             appendClientLog("连接已断开，清空测试列表");
+            // Disable start button when disconnected
+            view.getStartTestButton().setEnabled(false);
             clearTestTable();
+            // Timer will continue but won't do anything since connection is false
         }
     }
 

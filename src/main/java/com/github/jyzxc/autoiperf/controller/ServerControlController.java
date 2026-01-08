@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.Container;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.List;
 
 public class ServerControlController {
@@ -20,12 +22,43 @@ public class ServerControlController {
     private final ServerControlPanel view;
     private final ServerManagerService service;
     private final ResultsPanel resultsPanel;
+    private Timer refreshTimer;
 
     public ServerControlController(ServerControlPanel view, ServerManagerService service, ResultsPanel resultsPanel) {
         this.view = view;
         this.service = service;
         this.resultsPanel = resultsPanel;
         addListeners();
+        startAutoRefresh();
+    }
+    
+    /**
+     * Start automatic refresh timer that updates the table every 10 seconds.
+     */
+    private void startAutoRefresh() {
+        refreshTimer = new Timer(10000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+                if (remoteMachinePanel != null && remoteMachinePanel.isConnected()) {
+                    log.debug("Auto-refreshing server instances table...");
+                    handleDiscoverInstances();
+                }
+            }
+        });
+        refreshTimer.setRepeats(true);
+        refreshTimer.start();
+        log.info("Started auto-refresh timer for server instances (every 10 seconds)");
+    }
+    
+    /**
+     * Stop the auto-refresh timer.
+     */
+    public void stopAutoRefresh() {
+        if (refreshTimer != null) {
+            refreshTimer.stop();
+            log.info("Stopped auto-refresh timer for server instances");
+        }
     }
     
     /**
@@ -59,10 +92,12 @@ public class ServerControlController {
             appendServerLog(String.format("已连接到服务端主机: %s", host));
             appendServerLog("正在发现运行中的 iperf3 实例...");
             handleDiscoverInstances();
+            // Timer is already started in constructor, it will check connection status
         } else {
             log.info("Connection lost, clearing instance table.");
             appendServerLog("连接已断开，清空实例列表");
             clearInstanceTable();
+            // Timer will continue but won't do anything since connection is false
         }
     }
 
