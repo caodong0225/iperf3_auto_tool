@@ -129,11 +129,10 @@ public class FileManagementController {
         DefaultTableModel model = (DefaultTableModel) view.getServerFilesTable().getModel();
         model.setRowCount(0);
 
-        // PID column removed as requested - now only 7 columns: 文件名, 类型, 服务器IP, 端口, 客户端IP, 文件大小, 时间戳
+        // PID and Type columns removed as requested - now only 6 columns: 文件名, 服务器IP, 端口, 客户端IP, 文件大小, 时间戳
         for (FileManagementService.JsonFileInfo file : files) {
             model.addRow(new Object[]{
                     file.getFilename(),
-                    file.getType() != null ? file.getType() : "N/A",
                     file.getServerIp() != null ? file.getServerIp() : "N/A",
                     file.getPort() > 0 ? file.getPort() : "N/A",
                     file.getClientIp() != null ? file.getClientIp() : "N/A",
@@ -141,7 +140,7 @@ public class FileManagementController {
                     file.getTimestamp() != null ? file.getTimestamp() : "N/A"
             });
         }
-        log.info("Updated server files table with {} files (PID column removed)", files.size());
+        log.info("Updated server files table with {} files (PID and Type columns removed)", files.size());
     }
 
     private String formatFileSize(long bytes) {

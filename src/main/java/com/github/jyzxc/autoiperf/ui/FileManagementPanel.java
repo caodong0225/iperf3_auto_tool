@@ -26,9 +26,8 @@ public class FileManagementPanel extends JPanel {
         serverPanel.add(serverRemotePanel, BorderLayout.NORTH);
 
         // Server files table (shows all json files under /tmp/iperf3 on the server host)
-        // Include Type + Client IP for compatibility when server host also contains client-result files.
-        // PID column removed as requested
-        String[] serverColumnNames = {"文件名", "类型", "服务器IP", "端口", "客户端IP", "文件大小", "时间戳"};
+        // PID and Type columns removed as requested
+        String[] serverColumnNames = {"文件名", "服务器IP", "端口", "客户端IP", "文件大小", "时间戳"};
         DefaultTableModel serverTableModel = new DefaultTableModel(serverColumnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -45,12 +44,11 @@ public class FileManagementPanel extends JPanel {
         serverFilesTable.setColumnSelectionAllowed(false);
         serverFilesTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         serverFilesTable.getColumnModel().getColumn(0).setPreferredWidth(200);  // 文件名
-        serverFilesTable.getColumnModel().getColumn(1).setPreferredWidth(70);   // 类型
-        serverFilesTable.getColumnModel().getColumn(2).setPreferredWidth(120);  // 服务器IP
-        serverFilesTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // 端口
-        serverFilesTable.getColumnModel().getColumn(4).setPreferredWidth(120);  // 客户端IP
-        serverFilesTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // 文件大小
-        serverFilesTable.getColumnModel().getColumn(6).setPreferredWidth(150);  // 时间戳
+        serverFilesTable.getColumnModel().getColumn(1).setPreferredWidth(120);  // 服务器IP
+        serverFilesTable.getColumnModel().getColumn(2).setPreferredWidth(80);   // 端口
+        serverFilesTable.getColumnModel().getColumn(3).setPreferredWidth(120);  // 客户端IP
+        serverFilesTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // 文件大小
+        serverFilesTable.getColumnModel().getColumn(5).setPreferredWidth(150);  // 时间戳
         
         JScrollPane serverTableScrollPane = new JScrollPane(serverFilesTable);
         serverTableScrollPane.setBorder(new TitledBorder("服务端 /tmp/iperf3 JSON 文件"));
