@@ -223,6 +223,33 @@ public class ClientControlController {
         int duration = (Integer) view.getDurationSpinner().getValue();
         String protocol = (String) view.getProtocolComboBox().getSelectedItem();
         boolean bidirectional = view.getBidirectionalCheckBox().isSelected();
+        int interval = (Integer) view.getIntervalSpinner().getValue();
+        
+        // Parse packet length
+        Integer packetLength = null;
+        String packetLengthSelection = (String) view.getPacketLengthComboBox().getSelectedItem();
+        if ("自定义".equals(packetLengthSelection)) {
+            String customValue = view.getPacketLengthCustomField().getText().trim();
+            if (!customValue.isEmpty()) {
+                try {
+                    // Remove 'B' suffix if present and parse
+                    String numStr = customValue.replaceAll("[Bb]", "").trim();
+                    packetLength = Integer.parseInt(numStr);
+                } catch (NumberFormatException e) {
+                    JOptionPane.showMessageDialog(view, "发包大小格式错误，请输入数字（如：65536或65536B）。", "错误", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+            }
+        } else if (packetLengthSelection != null && !packetLengthSelection.isEmpty()) {
+            // Parse preset value like "64B", "128B", etc.
+            try {
+                String numStr = packetLengthSelection.replaceAll("[Bb]", "").trim();
+                packetLength = Integer.parseInt(numStr);
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse packet length from preset: {}", packetLengthSelection);
+            }
+        }
+        
         String host = remoteMachinePanel.getHostField().getText();
         String selectedIp = remoteMachinePanel.getSelectedNicIp();
 
@@ -268,6 +295,8 @@ public class ClientControlController {
                     .duration(duration)
                     .protocol(protocol)
                     .bidirectionalTest(true)
+                    .packetLength(packetLength)
+                    .interval(interval)
                     .build();
         } else {
             config = ClientTestConfig.builder()
@@ -278,6 +307,8 @@ public class ClientControlController {
                     .duration(duration)
                     .protocol(protocol)
                     .bidirectionalTest(false)
+                    .packetLength(packetLength)
+                    .interval(interval)
                     .build();
         }
 

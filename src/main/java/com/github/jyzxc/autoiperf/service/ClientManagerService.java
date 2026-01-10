@@ -40,12 +40,17 @@ public class ClientManagerService {
         }
 
         // Generate JSON file paths on remote machine
+        // Include packet length in filename if specified
         String testId = UUID.randomUUID().toString();
         String timestamp = java.time.LocalDateTime.now().format(
                 java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String remoteJsonFile = String.format("/tmp/iperf3/test_%s_%s.json", timestamp, testId.substring(0, 8));
-        String sendJsonFile = String.format("/tmp/iperf3/send_%s_%s.json", timestamp, testId.substring(0, 8));
-        String receiveJsonFile = String.format("/tmp/iperf3/receive_%s_%s.json", timestamp, testId.substring(0, 8));
+        String packetLengthSuffix = "";
+        if (config.getPacketLength() != null) {
+            packetLengthSuffix = "_l" + config.getPacketLength();
+        }
+        String remoteJsonFile = String.format("/tmp/iperf3/test_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
+        String sendJsonFile = String.format("/tmp/iperf3/send_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
+        String receiveJsonFile = String.format("/tmp/iperf3/receive_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
 
         // Ensure /tmp/iperf3 directory exists
         String mkdirCommand = "mkdir -p /tmp/iperf3";
@@ -179,16 +184,30 @@ public class ClientManagerService {
 
     /**
      * Build the send command for bidirectional test.
-     * Format: iperf3 -c 目标ip1 -p 端口1 -t 时间 -i 1 -J -l 1024 > send_xxx.json
+     * Format: iperf3 -c 目标ip1 -p 端口1 -t 时间 -i 间隔 -J -l 发包大小 > send_xxx.json
      */
     private String buildBidirectionalSendCommand(ClientTestConfig config, String jsonFilePath) {
         StringBuilder cmd = new StringBuilder("iperf3 -c ");
         cmd.append(config.getTargetHost());
         cmd.append(" -p ").append(config.getTargetPort());
         cmd.append(" -t ").append(config.getDuration());
-        cmd.append(" -i 1"); // Interval 1 second
+        
+        // Interval parameter (-i)
+        if (config.getInterval() != null && config.getInterval() > 0) {
+            cmd.append(" -i ").append(config.getInterval());
+        } else {
+            cmd.append(" -i 1"); // Default 1 second
+        }
+        
         cmd.append(" -J"); // JSON output format
-        cmd.append(" -l 1024"); // Length 1024 bytes
+        
+        // Packet length parameter (-l)
+        if (config.getPacketLength() != null && config.getPacketLength() > 0) {
+            cmd.append(" -l ").append(config.getPacketLength());
+        } else {
+            cmd.append(" -l 1024"); // Default 1024 bytes
+        }
+        
         cmd.append(" > ").append(jsonFilePath); // Use > redirection instead of --logfile
         
         // Protocol
@@ -206,16 +225,30 @@ public class ClientManagerService {
     
     /**
      * Build the receive command for bidirectional test.
-     * Format: iperf3 -c 目标ip2 -p 端口2 -t 时间 -i 1 -J -l 1024 -R > receive_xxx.json
+     * Format: iperf3 -c 目标ip2 -p 端口2 -t 时间 -i 间隔 -J -l 发包大小 -R > receive_xxx.json
      */
     private String buildBidirectionalReceiveCommand(ClientTestConfig config, String jsonFilePath) {
         StringBuilder cmd = new StringBuilder("iperf3 -c ");
         cmd.append(config.getTargetHost2() != null ? config.getTargetHost2() : config.getTargetHost());
         cmd.append(" -p ").append(config.getTargetPort2());
         cmd.append(" -t ").append(config.getDuration());
-        cmd.append(" -i 1"); // Interval 1 second
+        
+        // Interval parameter (-i)
+        if (config.getInterval() != null && config.getInterval() > 0) {
+            cmd.append(" -i ").append(config.getInterval());
+        } else {
+            cmd.append(" -i 1"); // Default 1 second
+        }
+        
         cmd.append(" -J"); // JSON output format
-        cmd.append(" -l 1024"); // Length 1024 bytes
+        
+        // Packet length parameter (-l)
+        if (config.getPacketLength() != null && config.getPacketLength() > 0) {
+            cmd.append(" -l ").append(config.getPacketLength());
+        } else {
+            cmd.append(" -l 1024"); // Default 1024 bytes
+        }
+        
         cmd.append(" -R"); // Reverse test (server sends, client receives)
         cmd.append(" > ").append(jsonFilePath); // Use > redirection instead of --logfile
         
@@ -241,6 +274,14 @@ public class ClientManagerService {
         cmd.append(config.getTargetHost());
         cmd.append(" -p ").append(config.getTargetPort());
         cmd.append(" -t ").append(config.getDuration());
+        
+        // Interval parameter (-i)
+        if (config.getInterval() != null && config.getInterval() > 0) {
+            cmd.append(" -i ").append(config.getInterval());
+        } else {
+            cmd.append(" -i 1"); // Default 1 second
+        }
+        
         cmd.append(" -J"); // JSON output format
         cmd.append(" --logfile ").append(jsonFilePath); // Use --logfile to save JSON output directly
 
@@ -250,7 +291,10 @@ public class ClientManagerService {
             if (config.getBandwidth() != null) {
                 cmd.append(" -b ").append(config.getBandwidth());
             }
-            if (config.getPacketSize() != null) {
+            // Use packetLength if specified, otherwise fall back to packetSize for backward compatibility
+            if (config.getPacketLength() != null && config.getPacketLength() > 0) {
+                cmd.append(" -l ").append(config.getPacketLength());
+            } else if (config.getPacketSize() != null) {
                 cmd.append(" -l ").append(config.getPacketSize());
             }
         } else {
@@ -260,6 +304,10 @@ public class ClientManagerService {
             }
             if (config.getBandwidth() != null) {
                 cmd.append(" -b ").append(config.getBandwidth());
+            }
+            // Packet length for TCP (-l parameter)
+            if (config.getPacketLength() != null && config.getPacketLength() > 0) {
+                cmd.append(" -l ").append(config.getPacketLength());
             }
         }
 

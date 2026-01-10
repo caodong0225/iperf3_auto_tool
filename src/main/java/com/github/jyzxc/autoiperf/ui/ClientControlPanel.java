@@ -18,6 +18,9 @@ public class ClientControlPanel extends JPanel {
     private final JCheckBox bidirectionalCheckBox;
     private final JTextField targetIp2Field;
     private final JSpinner targetPort2Spinner;
+    private final JComboBox<String> packetLengthComboBox;
+    private final JTextField packetLengthCustomField;
+    private final JSpinner intervalSpinner;
     private final JButton startTestButton;
     private final JTable clientProcessesTable;
     private final JButton refreshButton;
@@ -106,8 +109,39 @@ public class ClientControlPanel extends JPanel {
             targetPort2Spinner.setEnabled(enabled);
         });
 
-        // Row 7: Start button
-        gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 4; gbc.weightx = 1.0;
+        // Row 7: Packet Length (-l parameter)
+        gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 1; gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        parametersPanel.add(new JLabel("发包大小:"), gbc);
+        gbc.gridx = 1; gbc.gridy = 7; gbc.gridwidth = 1; gbc.weightx = 0;
+        packetLengthComboBox = new JComboBox<>(new String[]{"64B", "128B", "256B", "1024B", "2048B", "4096B", "自定义"});
+        packetLengthComboBox.setToolTipText("选择预设值或选择'自定义'后输入");
+        parametersPanel.add(packetLengthComboBox, gbc);
+        gbc.gridx = 2; gbc.gridy = 7; gbc.gridwidth = 1; gbc.weightx = 0;
+        packetLengthCustomField = new JTextField("");
+        packetLengthCustomField.setToolTipText("自定义发包大小（如：65536B）");
+        packetLengthCustomField.setEnabled(false);
+        parametersPanel.add(packetLengthCustomField, gbc);
+        
+        // Add listener to enable/disable custom field
+        packetLengthComboBox.addActionListener(e -> {
+            boolean enabled = "自定义".equals(packetLengthComboBox.getSelectedItem());
+            packetLengthCustomField.setEnabled(enabled);
+            if (enabled) {
+                packetLengthCustomField.requestFocus();
+            }
+        });
+
+        // Row 8: Interval (-i parameter)
+        gbc.gridx = 0; gbc.gridy = 8; gbc.gridwidth = 1; gbc.weightx = 0;
+        parametersPanel.add(new JLabel("记录间隔(秒):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 8; gbc.gridwidth = 1; gbc.weightx = 0;
+        intervalSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 60, 1));
+        intervalSpinner.setToolTipText("每隔几秒记录一次数据（默认1秒）");
+        parametersPanel.add(intervalSpinner, gbc);
+
+        // Row 9: Start button
+        gbc.gridx = 0; gbc.gridy = 9; gbc.gridwidth = 4; gbc.weightx = 1.0;
         gbc.fill = GridBagConstraints.NONE;
         gbc.anchor = GridBagConstraints.CENTER;
         startTestButton = new JButton("开始新测试");

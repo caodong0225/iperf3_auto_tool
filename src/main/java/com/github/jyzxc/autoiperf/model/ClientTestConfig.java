@@ -23,5 +23,7 @@ public class ClientTestConfig {
     private Boolean bidirectionalTest;      // Bidirectional test (both send and receive)
     private String targetHost2;             // Second target host for bidirectional test (optional)
     private int targetPort2;                // Second target port for bidirectional test (optional)
+    private Integer packetLength;           // Packet length in bytes (-l parameter, e.g., 65536)
+    private Integer interval;               // Interval in seconds for periodic bandwidth reports (-i parameter, default 1)
 }
 
