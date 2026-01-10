@@ -1,14 +1,18 @@
 package com.github.jyzxc.autoiperf.sshtool;
 
+import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.SftpException;
 import com.jcraft.jsch.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 
 public class SshService {
 
@@ -153,5 +157,45 @@ public class SshService {
             session.disconnect();
         }
         session = null;
+    }
+
+    /**
+     * Download a remote file to local path via SFTP.
+     * @param remotePath remote absolute path (e.g. /tmp/iperf3/test_xxx.json)
+     * @param localPath local file path
+     */
+    public void downloadFile(String remotePath, String localPath) throws JSchException, SftpException {
+        if (session == null || !session.isConnected()) {
+            log.error("Cannot download file. Session is not connected.");
+            throw new JSchException("Session is not connected.");
+        }
+        if (remotePath == null || remotePath.isBlank()) {
+            throw new IllegalArgumentException("remotePath is blank");
+        }
+        if (localPath == null || localPath.isBlank()) {
+            throw new IllegalArgumentException("localPath is blank");
+        }
+
+        File localFile = new File(localPath);
+        File parent = localFile.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IllegalStateException("Failed to create local directory: " + parent.getAbsolutePath());
+        }
+
+        ChannelSftp sftp = null;
+        try {
+            Channel channel = session.openChannel("sftp");
+            channel.connect(10_000);
+            sftp = (ChannelSftp) channel;
+            log.info("Downloading remote file '{}' to '{}'", remotePath, localFile.getAbsolutePath());
+            sftp.get(remotePath, localFile.getAbsolutePath());
+        } finally {
+            if (sftp != null) {
+                try {
+                    sftp.disconnect();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 }

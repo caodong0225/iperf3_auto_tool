@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.List;
 
 public class FileManagementController {
@@ -25,8 +28,53 @@ public class FileManagementController {
     private void addListeners() {
         view.getRefreshServerButton().addActionListener(e -> handleRefreshServerFiles());
         view.getDeleteServerFileButton().addActionListener(e -> handleDeleteServerFile());
+        installTableContextMenu();
         
         // File content viewing removed as requested
+    }
+
+    private void installTableContextMenu() {
+        JTable table = view.getServerFilesTable();
+        JPopupMenu menu = new JPopupMenu();
+
+        JMenuItem deleteItem = new JMenuItem("删除");
+        deleteItem.addActionListener(e -> handleDeleteServerFile());
+
+        JMenuItem downloadItem = new JMenuItem("下载...");
+        downloadItem.addActionListener(e -> handleDownloadSelectedFile());
+
+        menu.add(downloadItem);
+        menu.add(deleteItem);
+
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                maybeShowPopup(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                maybeShowPopup(e);
+            }
+
+            private void maybeShowPopup(MouseEvent e) {
+                if (!e.isPopupTrigger()) {
+                    return;
+                }
+                int row = table.rowAtPoint(e.getPoint());
+                if (row >= 0 && row < table.getRowCount()) {
+                    table.setRowSelectionInterval(row, row);
+                } else {
+                    table.clearSelection();
+                }
+
+                boolean hasSelection = table.getSelectedRow() >= 0;
+                downloadItem.setEnabled(hasSelection);
+                deleteItem.setEnabled(hasSelection);
+
+                menu.show(e.getComponent(), e.getX(), e.getY());
+            }
+        });
     }
 
     private void handleRefreshServerFiles() {
@@ -143,6 +191,61 @@ public class FileManagementController {
                 } catch (Exception e) {
                     log.error("Failed to delete file", e);
                     JOptionPane.showMessageDialog(view, "删除失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void handleDownloadSelectedFile() {
+        JTable table = view.getServerFilesTable();
+        RemoteMachinePanel remotePanel = view.getServerRemotePanel();
+
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(view, "请先选择一个文件。", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (!remotePanel.isConnected()) {
+            JOptionPane.showMessageDialog(view, "请先连接到服务端主机。", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String filename = (String) table.getModel().getValueAt(selectedRow, 0);
+        String remotePath = "/tmp/iperf3/" + filename;
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("保存文件到本地");
+        chooser.setSelectedFile(new File(filename));
+        int result = chooser.showSaveDialog(view);
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File localFile = chooser.getSelectedFile();
+        view.getRefreshServerButton().setEnabled(false);
+        view.getDeleteServerFileButton().setEnabled(false);
+
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                service.downloadFile(remotePanel.getSshService(), remotePath, localFile.getAbsolutePath());
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    JOptionPane.showMessageDialog(view,
+                            "下载成功: " + localFile.getAbsolutePath(),
+                            "成功",
+                            JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception e) {
+                    log.error("Failed to download file", e);
+                    JOptionPane.showMessageDialog(view, "下载失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    view.getRefreshServerButton().setEnabled(true);
+                    view.getDeleteServerFileButton().setEnabled(true);
                 }
             }
         }.execute();

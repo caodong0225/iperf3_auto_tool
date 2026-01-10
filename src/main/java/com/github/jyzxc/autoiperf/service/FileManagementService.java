@@ -272,6 +272,14 @@ public class FileManagementService {
     }
 
     /**
+     * Download a file from remote machine to local path.
+     */
+    public void downloadFile(SshService sshService, String remotePath, String localPath) throws Exception {
+        log.info("Downloading file from '{}' to '{}'", remotePath, localPath);
+        sshService.downloadFile(remotePath, localPath);
+    }
+
+    /**
      * Read JSON file content from remote machine.
      */
     public String readFileContent(SshService sshService, String filePath) throws Exception {
