@@ -53,113 +53,68 @@ public class ClientManagerService {
         log.debug("Ensured /tmp/iperf3 directory exists");
 
         if (bidirectional) {
-            // Start bidirectional test: two processes
-            // Process 1: Send (normal client test)
+            // Start bidirectional test: single command with & separator for concurrent execution
+            // Format: iperf3 -c ip1 -p port1 -t time -i 1 -J -l 1024 > send_xxx.json & iperf3 -c ip2 -p port2 -t time -i 1 -J -l 1024 -R > receive_xxx.json
             String sendCommand = buildBidirectionalSendCommand(config, sendJsonFile);
-            log.debug("Executing send command: {}", sendCommand);
-            String sendBgCommand = String.format("nohup %s > /dev/null 2>&1 & echo $!", sendCommand);
-            String sendOutput = null;
-            try {
-                sendOutput = sshService.executeCommand(sendBgCommand, 5000);
-                log.info("Send command output received: '{}'", sendOutput);
-            } catch (Exception e) {
-                log.error("Failed to execute send command: {}", e.getMessage(), e);
-                throw new Exception("Failed to execute iperf3 send command: " + e.getMessage());
-            }
-
-            if (sendOutput == null || sendOutput.trim().isEmpty()) {
-                log.error("Send command returned null or empty output");
-                throw new Exception("Failed to start iperf3 send test: command returned empty output");
-            }
-
-            String sendPidStr = sendOutput.trim().replaceAll("[^0-9]", "");
-            if (sendPidStr.isEmpty() || !sendPidStr.matches("\\d+")) {
-                log.error("Failed to extract valid PID from send output: '{}'", sendOutput);
-                throw new Exception("Failed to get PID for iperf3 send process. Output: '" + sendOutput + "'");
-            }
-
-            // Process 2: Receive (reverse test)
             String receiveCommand = buildBidirectionalReceiveCommand(config, receiveJsonFile);
-            log.debug("Executing receive command: {}", receiveCommand);
-            String receiveBgCommand = String.format("nohup %s > /dev/null 2>&1 & echo $!", receiveCommand);
-            String receiveOutput = null;
+            
+            // Combine both commands with & separator for concurrent execution
+            // Use sh -c to execute the compound command in background
+            String combinedCommand = String.format("sh -c '%s & %s'", sendCommand, receiveCommand);
+            log.debug("Executing bidirectional command: {}", combinedCommand);
+            
+            // Execute in background and get PID of the shell process
+            String bgCommand = String.format("nohup %s > /dev/null 2>&1 & echo $!", combinedCommand);
+            String output = null;
             try {
-                receiveOutput = sshService.executeCommand(receiveBgCommand, 5000);
-                log.info("Receive command output received: '{}'", receiveOutput);
+                output = sshService.executeCommand(bgCommand, 5000);
+                log.info("Bidirectional command output received: '{}'", output);
             } catch (Exception e) {
-                log.error("Failed to execute receive command: {}", e.getMessage(), e);
-                // Try to kill the send process if receive fails
-                try {
-                    sshService.executeCommand("kill -9 " + sendPidStr, 2000);
-                } catch (Exception killEx) {
-                    log.warn("Failed to kill send process after receive failure: {}", killEx.getMessage());
-                }
-                throw new Exception("Failed to execute iperf3 receive command: " + e.getMessage());
+                log.error("Failed to execute bidirectional command: {}", e.getMessage(), e);
+                throw new Exception("Failed to execute bidirectional iperf3 command: " + e.getMessage());
             }
 
-            if (receiveOutput == null || receiveOutput.trim().isEmpty()) {
-                log.error("Receive command returned null or empty output");
-                // Try to kill the send process
-                try {
-                    sshService.executeCommand("kill -9 " + sendPidStr, 2000);
-                } catch (Exception killEx) {
-                    log.warn("Failed to kill send process after receive failure: {}", killEx.getMessage());
-                }
-                throw new Exception("Failed to start iperf3 receive test: command returned empty output");
+            if (output == null || output.trim().isEmpty()) {
+                log.error("Bidirectional command returned null or empty output");
+                throw new Exception("Failed to start bidirectional iperf3 test: command returned empty output");
             }
 
-            String receivePidStr = receiveOutput.trim().replaceAll("[^0-9]", "");
-            if (receivePidStr.isEmpty() || !receivePidStr.matches("\\d+")) {
-                log.error("Failed to extract valid PID from receive output: '{}'", receiveOutput);
-                // Try to kill the send process
-                try {
-                    sshService.executeCommand("kill -9 " + sendPidStr, 2000);
-                } catch (Exception killEx) {
-                    log.warn("Failed to kill send process after receive failure: {}", killEx.getMessage());
-                }
-                throw new Exception("Failed to get PID for iperf3 receive process. Output: '" + receiveOutput + "'");
+            // Extract PID from output (this is the shell process PID)
+            String pidStr = output.trim().replaceAll("[^0-9]", "");
+            if (pidStr.isEmpty() || !pidStr.matches("\\d+")) {
+                log.error("Failed to extract valid PID from output: '{}'", output);
+                throw new Exception("Failed to get PID for bidirectional iperf3 process. Output: '" + output + "'");
             }
 
-            log.info("Bidirectional iperf3 test processes created: Send PID={}, Receive PID={}. Verifying startup...", 
-                    sendPidStr, receivePidStr);
+            log.info("Bidirectional iperf3 test processes created with shell PID: {}. Verifying startup...", pidStr);
 
-            // Verify both processes are running
-            Thread.sleep(300);
-            String sendPsCheck = null;
-            String receivePsCheck = null;
+            // Verify processes are running (check for iperf3 processes with our test parameters)
+            Thread.sleep(500); // Give processes time to start
+            String psCheckOutput = null;
             try {
-                sendPsCheck = sshService.executeCommand("ps -p " + sendPidStr, 2000);
-                receivePsCheck = sshService.executeCommand("ps -p " + receivePidStr, 2000);
+                // Check for iperf3 processes matching our test parameters
+                String checkCommand = String.format("ps aux | grep 'iperf3.*-c.*%s.*-p.*%d' | grep -v grep", 
+                        config.getTargetHost(), config.getTargetPort());
+                psCheckOutput = sshService.executeCommand(checkCommand, 2000);
             } catch (Exception e) {
                 log.warn("Failed to check process status: {}", e.getMessage());
-                sendPsCheck = "";
-                receivePsCheck = "";
+                psCheckOutput = "";
             }
 
-            if (sendPsCheck == null || !sendPsCheck.contains(sendPidStr)) {
-                log.error("Send process {} is not running after startup", sendPidStr);
-                throw new Exception("iperf3 send process with PID " + sendPidStr + " failed to start or died immediately.");
-            }
-            if (receivePsCheck == null || !receivePsCheck.contains(receivePidStr)) {
-                log.error("Receive process {} is not running after startup", receivePidStr);
-                // Try to kill the send process
-                try {
-                    sshService.executeCommand("kill -9 " + sendPidStr, 2000);
-                } catch (Exception killEx) {
-                    log.warn("Failed to kill send process after receive failure: {}", killEx.getMessage());
-                }
-                throw new Exception("iperf3 receive process with PID " + receivePidStr + " failed to start or died immediately.");
+            if (psCheckOutput == null || psCheckOutput.trim().isEmpty()) {
+                log.warn("Could not verify iperf3 processes are running, but continuing anyway");
+            } else {
+                log.debug("Found running iperf3 processes: {}", psCheckOutput);
             }
 
             // Build command line for display (show both commands)
-            String cmdLine = String.format("SEND: %s | RECEIVE: %s", sendCommand, receiveCommand);
+            String cmdLine = String.format("%s & %s", sendCommand, receiveCommand);
 
-            log.info("Verified: Send PID {} and Receive PID {} are running. Bidirectional test started successfully.", 
-                    sendPidStr, receivePidStr);
+            log.info("Bidirectional test started successfully with shell PID: {}", pidStr);
             return ClientTestInstance.builder()
                     .instanceId(testId)
                     .remoteHost(host)
-                    .pid(Integer.parseInt(sendPidStr)) // Return send PID as primary
+                    .pid(Integer.parseInt(pidStr)) // Return shell PID
                     .targetHost(config.getTargetHost())
                     .targetPort(config.getTargetPort())
                     .commandLine(cmdLine)
@@ -224,7 +179,7 @@ public class ClientManagerService {
 
     /**
      * Build the send command for bidirectional test.
-     * Format: iperf3 -c 目标ip1 -p 端口1 -t 时间 -i 1 -J -l 1024 --logfile send_xxx.json
+     * Format: iperf3 -c 目标ip1 -p 端口1 -t 时间 -i 1 -J -l 1024 > send_xxx.json
      */
     private String buildBidirectionalSendCommand(ClientTestConfig config, String jsonFilePath) {
         StringBuilder cmd = new StringBuilder("iperf3 -c ");
@@ -234,7 +189,7 @@ public class ClientManagerService {
         cmd.append(" -i 1"); // Interval 1 second
         cmd.append(" -J"); // JSON output format
         cmd.append(" -l 1024"); // Length 1024 bytes
-        cmd.append(" --logfile ").append(jsonFilePath);
+        cmd.append(" > ").append(jsonFilePath); // Use > redirection instead of --logfile
         
         // Protocol
         if ("UDP".equalsIgnoreCase(config.getProtocol())) {
@@ -251,7 +206,7 @@ public class ClientManagerService {
     
     /**
      * Build the receive command for bidirectional test.
-     * Format: iperf3 -c 目标ip2 -p 端口2 -t 时间 -i 1 -J -l 1024 -R --logfile receive_xxx.json
+     * Format: iperf3 -c 目标ip2 -p 端口2 -t 时间 -i 1 -J -l 1024 -R > receive_xxx.json
      */
     private String buildBidirectionalReceiveCommand(ClientTestConfig config, String jsonFilePath) {
         StringBuilder cmd = new StringBuilder("iperf3 -c ");
@@ -262,7 +217,7 @@ public class ClientManagerService {
         cmd.append(" -J"); // JSON output format
         cmd.append(" -l 1024"); // Length 1024 bytes
         cmd.append(" -R"); // Reverse test (server sends, client receives)
-        cmd.append(" --logfile ").append(jsonFilePath);
+        cmd.append(" > ").append(jsonFilePath); // Use > redirection instead of --logfile
         
         // Protocol
         if ("UDP".equalsIgnoreCase(config.getProtocol())) {

@@ -12,6 +12,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -423,6 +424,7 @@ public class ServerControlController {
 
     /**
      * Incrementally update the instance table: only add new instances and remove disappeared ones.
+     * De-duplicates instances by PID to prevent duplicates.
      */
     private void updateInstanceTable(List<IperfServerInstance> discoveredInstances) {
         log.debug("Incremental update: discovered {} instances, current table has {}", 
@@ -431,38 +433,64 @@ public class ServerControlController {
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
         Map<Integer, IperfServerInstance> discoveredMap = new HashMap<>();
         
-        // Build map of discovered instances by PID
+        // Build map of discovered instances by PID (de-duplicate by PID)
         for (IperfServerInstance instance : discoveredInstances) {
-            discoveredMap.put(instance.getPid(), instance);
-        }
-        
-        // Find instances that disappeared (in currentInstances but not in discoveredMap)
-        for (Integer pid : currentInstances.keySet()) {
-            if (!discoveredMap.containsKey(pid)) {
-                // This instance disappeared, remove from table
-                removeInstanceFromTable(pid);
-                log.debug("Removed disappeared instance: PID={}", pid);
-            }
-        }
-        
-        // Find new instances (in discoveredMap but not in currentInstances)
-        for (IperfServerInstance instance : discoveredInstances) {
-            if (!currentInstances.containsKey(instance.getPid())) {
-                // This is a new instance, add to table
-                addInstanceToTable(instance);
-                log.debug("Added new instance: PID={}", instance.getPid());
-            } else {
-                // Instance exists, check if status changed and update if needed
-                IperfServerInstance existing = currentInstances.get(instance.getPid());
-                if (existing.getStatus() != instance.getStatus()) {
-                    updateInstanceStatus(instance);
-                    log.debug("Updated instance status: PID={}, old={}, new={}", 
-                            instance.getPid(), existing.getStatus(), instance.getStatus());
+            Integer pid = instance.getPid();
+            if (pid != null) {
+                // If duplicate PID exists, log warning and keep the first one
+                if (discoveredMap.containsKey(pid)) {
+                    log.warn("Duplicate PID {} found in discovered instances, keeping first occurrence", pid);
+                } else {
+                    discoveredMap.put(pid, instance);
                 }
             }
         }
         
-        // Update currentInstances map
+        // First, remove instances that disappeared (in currentInstances but not in discoveredMap)
+        List<Integer> pidsToRemove = new ArrayList<>();
+        for (Integer pid : currentInstances.keySet()) {
+            if (!discoveredMap.containsKey(pid)) {
+                pidsToRemove.add(pid);
+            }
+        }
+        for (Integer pid : pidsToRemove) {
+            removeInstanceFromTable(pid);
+            log.debug("Removed disappeared instance: PID={}", pid);
+        }
+        
+        // Then, add new instances or update existing ones (in discoveredMap)
+        for (IperfServerInstance instance : discoveredMap.values()) {
+            Integer pid = instance.getPid();
+            if (pid == null) {
+                log.warn("Skipping instance with null PID");
+                continue;
+            }
+            
+            // Check if this PID already exists in the table
+            boolean existsInTable = false;
+            for (int i = 0; i < model.getRowCount(); i++) {
+                Integer rowPid = (Integer) model.getValueAt(i, 0);
+                if (rowPid != null && rowPid.equals(pid)) {
+                    existsInTable = true;
+                    // Instance exists, check if status changed and update if needed
+                    IperfServerInstance existing = currentInstances.get(pid);
+                    if (existing == null || existing.getStatus() != instance.getStatus()) {
+                        updateInstanceStatus(instance);
+                        log.debug("Updated instance status: PID={}, old={}, new={}", 
+                                pid, existing != null ? existing.getStatus() : "null", instance.getStatus());
+                    }
+                    break;
+                }
+            }
+            
+            // If not in table, add it
+            if (!existsInTable) {
+                addInstanceToTable(instance);
+                log.debug("Added new instance: PID={}", pid);
+            }
+        }
+        
+        // Update currentInstances map to match discoveredMap
         currentInstances.clear();
         currentInstances.putAll(discoveredMap);
         
