@@ -14,6 +14,7 @@ public class ServerControlPanel extends JPanel {
     private final JSpinner portSpinner;
     private final JButton startServerButton;
     private final JTable serverInstancesTable;
+    private final JButton refreshButton;
     private final JButton stopServerButton;
     private final JButton killServerButton;
 
@@ -48,6 +49,9 @@ public class ServerControlPanel extends JPanel {
         };
         serverInstancesTable = new JTable(tableModel);
         
+        // Enable sorting for all columns
+        serverInstancesTable.setAutoCreateRowSorter(true);
+        
         // Configure table column widths
         serverInstancesTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         serverInstancesTable.getColumnModel().getColumn(0).setPreferredWidth(80);  // PID
@@ -66,10 +70,12 @@ public class ServerControlPanel extends JPanel {
         tableScrollPane.setMinimumSize(new Dimension(400, 150));
         tableScrollPane.setPreferredSize(new Dimension(600, 250));
         
-        // Bottom part: Stop/Kill controls for selected instance
+        // Bottom part: Refresh, Stop/Kill controls for selected instance
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        refreshButton = new JButton("刷新");
         stopServerButton = new JButton("停止服务");
         killServerButton = new JButton("强制终止");
+        bottomPanel.add(refreshButton);
         bottomPanel.add(stopServerButton);
         bottomPanel.add(killServerButton);
 

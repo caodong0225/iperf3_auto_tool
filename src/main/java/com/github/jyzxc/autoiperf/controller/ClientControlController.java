@@ -93,6 +93,7 @@ public class ClientControlController {
 
     private void addListeners() {
         view.getStartTestButton().addActionListener(e -> handleStartTest());
+        view.getRefreshButton().addActionListener(e -> handleRefreshInstances());
         view.getRemoteMachinePanel().addConnectionStateListener(this::handleConnectionStateChange);
         view.getStopTestButton().addActionListener(e -> handleStopOrKillTest(false));
         
@@ -102,6 +103,19 @@ public class ClientControlController {
                 handleServerInstanceSelection();
             }
         });
+    }
+    
+    /**
+     * Handle manual refresh button click - immediately refresh PID information.
+     */
+    private void handleRefreshInstances() {
+        RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
+        if (!remoteMachinePanel.isConnected()) {
+            JOptionPane.showMessageDialog(view, "请先连接到客户端主机。", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        appendClientLog("手动刷新PID信息...");
+        handleDiscoverClientTests(false); // false = not auto-refresh, so it will log to GUI
     }
 
     private void handleServerInstanceSelection() {

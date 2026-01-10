@@ -29,6 +29,13 @@ public class FileManagementController {
     private void addListeners() {
         view.getRefreshServerButton().addActionListener(e -> handleRefreshServerFiles());
         view.getDeleteServerFileButton().addActionListener(e -> handleDeleteServerFile());
+        // Listen for connection state changes - auto refresh files when connected
+        view.getServerRemotePanel().addConnectionStateListener(isConnected -> {
+            if (isConnected) {
+                log.info("File management connection established, auto-refreshing file list...");
+                SwingUtilities.invokeLater(() -> handleRefreshServerFiles());
+            }
+        });
         installTableContextMenu();
         
         // File content viewing removed as requested
@@ -62,12 +69,12 @@ public class FileManagementController {
                 if (!e.isPopupTrigger()) {
                     return;
                 }
-                int row = table.rowAtPoint(e.getPoint());
-                if (row >= 0 && row < table.getRowCount()) {
+                int viewRow = table.rowAtPoint(e.getPoint());
+                if (viewRow >= 0 && viewRow < table.getRowCount()) {
                     // If right-click is on an unselected row, switch selection to that row.
                     // If it's on a selected row, keep existing multi-selection.
-                    if (!table.isRowSelected(row)) {
-                        table.setRowSelectionInterval(row, row);
+                    if (!table.isRowSelected(viewRow)) {
+                        table.setRowSelectionInterval(viewRow, viewRow);
                     }
                 } else {
                     table.clearSelection();
@@ -122,6 +129,7 @@ public class FileManagementController {
         DefaultTableModel model = (DefaultTableModel) view.getServerFilesTable().getModel();
         model.setRowCount(0);
 
+        // PID column removed as requested - now only 7 columns: 文件名, 类型, 服务器IP, 端口, 客户端IP, 文件大小, 时间戳
         for (FileManagementService.JsonFileInfo file : files) {
             model.addRow(new Object[]{
                     file.getFilename(),
@@ -129,12 +137,11 @@ public class FileManagementController {
                     file.getServerIp() != null ? file.getServerIp() : "N/A",
                     file.getPort() > 0 ? file.getPort() : "N/A",
                     file.getClientIp() != null ? file.getClientIp() : "N/A",
-                    file.getPid() != null ? file.getPid() : "N/A",
                     formatFileSize(file.getFileSize()),
                     file.getTimestamp() != null ? file.getTimestamp() : "N/A"
             });
         }
-        log.info("Updated server files table with {} files", files.size());
+        log.info("Updated server files table with {} files (PID column removed)", files.size());
     }
 
     private String formatFileSize(long bytes) {
@@ -169,7 +176,9 @@ public class FileManagementController {
 
         List<String> filePaths = new ArrayList<>();
         for (int viewRow : selectedRows) {
-            String filename = (String) table.getModel().getValueAt(viewRow, 0);
+            // Convert view row index to model row index when table has sorting enabled
+            int modelRow = table.convertRowIndexToModel(viewRow);
+            String filename = (String) table.getModel().getValueAt(modelRow, 0);
             if (filename == null || filename.isBlank()) {
                 continue;
             }
@@ -230,7 +239,9 @@ public class FileManagementController {
         List<String> filenames = new ArrayList<>();
         List<String> remotePaths = new ArrayList<>();
         for (int viewRow : selectedRows) {
-            String filename = (String) table.getModel().getValueAt(viewRow, 0);
+            // Convert view row index to model row index when table has sorting enabled
+            int modelRow = table.convertRowIndexToModel(viewRow);
+            String filename = (String) table.getModel().getValueAt(modelRow, 0);
             if (filename == null || filename.isBlank()) {
                 continue;
             }

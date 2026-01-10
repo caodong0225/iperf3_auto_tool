@@ -27,7 +27,8 @@ public class FileManagementPanel extends JPanel {
 
         // Server files table (shows all json files under /tmp/iperf3 on the server host)
         // Include Type + Client IP for compatibility when server host also contains client-result files.
-        String[] serverColumnNames = {"文件名", "类型", "服务器IP", "端口", "客户端IP", "PID", "文件大小", "时间戳"};
+        // PID column removed as requested
+        String[] serverColumnNames = {"文件名", "类型", "服务器IP", "端口", "客户端IP", "文件大小", "时间戳"};
         DefaultTableModel serverTableModel = new DefaultTableModel(serverColumnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -35,6 +36,10 @@ public class FileManagementPanel extends JPanel {
             }
         };
         serverFilesTable = new JTable(serverTableModel);
+        
+        // Enable sorting for all columns
+        serverFilesTable.setAutoCreateRowSorter(true);
+        
         serverFilesTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         serverFilesTable.setRowSelectionAllowed(true);
         serverFilesTable.setColumnSelectionAllowed(false);
@@ -44,9 +49,8 @@ public class FileManagementPanel extends JPanel {
         serverFilesTable.getColumnModel().getColumn(2).setPreferredWidth(120);  // 服务器IP
         serverFilesTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // 端口
         serverFilesTable.getColumnModel().getColumn(4).setPreferredWidth(120);  // 客户端IP
-        serverFilesTable.getColumnModel().getColumn(5).setPreferredWidth(80);   // PID
-        serverFilesTable.getColumnModel().getColumn(6).setPreferredWidth(100);  // 文件大小
-        serverFilesTable.getColumnModel().getColumn(7).setPreferredWidth(150);  // 时间戳
+        serverFilesTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // 文件大小
+        serverFilesTable.getColumnModel().getColumn(6).setPreferredWidth(150);  // 时间戳
         
         JScrollPane serverTableScrollPane = new JScrollPane(serverFilesTable);
         serverTableScrollPane.setBorder(new TitledBorder("服务端 /tmp/iperf3 JSON 文件"));

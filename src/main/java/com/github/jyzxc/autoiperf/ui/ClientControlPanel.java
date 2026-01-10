@@ -20,6 +20,7 @@ public class ClientControlPanel extends JPanel {
     private final JSpinner targetPort2Spinner;
     private final JButton startTestButton;
     private final JTable clientProcessesTable;
+    private final JButton refreshButton;
     private final JButton stopTestButton;
 
     public ClientControlPanel() {
@@ -127,6 +128,9 @@ public class ClientControlPanel extends JPanel {
         };
         clientProcessesTable = new JTable(tableModel);
         
+        // Enable sorting for all columns
+        clientProcessesTable.setAutoCreateRowSorter(true);
+        
         // Configure table column widths
         clientProcessesTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         clientProcessesTable.getColumnModel().getColumn(0).setPreferredWidth(80);  // PID
@@ -143,7 +147,9 @@ public class ClientControlPanel extends JPanel {
         tableScrollPane.setPreferredSize(new Dimension(600, 200));
 
         JPanel stopButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        refreshButton = new JButton("刷新");
         stopTestButton = new JButton("终止测试");
+        stopButtonPanel.add(refreshButton);
         stopButtonPanel.add(stopTestButton);
 
         JPanel bottomContainer = new JPanel(new BorderLayout());
