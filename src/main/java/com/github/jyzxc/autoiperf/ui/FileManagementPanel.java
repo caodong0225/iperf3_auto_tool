@@ -36,6 +36,9 @@ public class FileManagementPanel extends JPanel {
         };
         serverFilesTable = new JTable(serverTableModel);
         serverFilesTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        serverFilesTable.setRowSelectionAllowed(true);
+        serverFilesTable.setColumnSelectionAllowed(false);
+        serverFilesTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         serverFilesTable.getColumnModel().getColumn(0).setPreferredWidth(200);  // 文件名
         serverFilesTable.getColumnModel().getColumn(1).setPreferredWidth(70);   // 类型
         serverFilesTable.getColumnModel().getColumn(2).setPreferredWidth(120);  // 服务器IP

@@ -11,6 +11,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 public class FileManagementController {
@@ -63,12 +64,16 @@ public class FileManagementController {
                 }
                 int row = table.rowAtPoint(e.getPoint());
                 if (row >= 0 && row < table.getRowCount()) {
-                    table.setRowSelectionInterval(row, row);
+                    // If right-click is on an unselected row, switch selection to that row.
+                    // If it's on a selected row, keep existing multi-selection.
+                    if (!table.isRowSelected(row)) {
+                        table.setRowSelectionInterval(row, row);
+                    }
                 } else {
                     table.clearSelection();
                 }
 
-                boolean hasSelection = table.getSelectedRow() >= 0;
+                boolean hasSelection = table.getSelectedRowCount() > 0;
                 downloadItem.setEnabled(hasSelection);
                 deleteItem.setEnabled(hasSelection);
 
@@ -151,8 +156,8 @@ public class FileManagementController {
         JTable table = view.getServerFilesTable();
         RemoteMachinePanel remotePanel = view.getServerRemotePanel();
         
-        int selectedRow = table.getSelectedRow();
-        if (selectedRow < 0) {
+        int[] selectedRows = table.getSelectedRows();
+        if (selectedRows == null || selectedRows.length == 0) {
             JOptionPane.showMessageDialog(view, "请先选择一个文件。", "提示", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -162,11 +167,21 @@ public class FileManagementController {
             return;
         }
 
-        String filename = (String) table.getModel().getValueAt(selectedRow, 0);
-        String filePath = "/tmp/iperf3/" + filename;
+        List<String> filePaths = new ArrayList<>();
+        for (int viewRow : selectedRows) {
+            String filename = (String) table.getModel().getValueAt(viewRow, 0);
+            if (filename == null || filename.isBlank()) {
+                continue;
+            }
+            filePaths.add("/tmp/iperf3/" + filename);
+        }
+        if (filePaths.isEmpty()) {
+            JOptionPane.showMessageDialog(view, "请选择有效的文件。", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
         int confirm = JOptionPane.showConfirmDialog(view, 
-                "确定要删除文件 " + filename + " 吗？", 
+                "确定要删除选中的 " + filePaths.size() + " 个文件吗？", 
                 "确认删除", 
                 JOptionPane.YES_NO_OPTION);
         
@@ -177,7 +192,9 @@ public class FileManagementController {
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                service.deleteFile(remotePanel.getSshService(), filePath);
+                for (String path : filePaths) {
+                    service.deleteFile(remotePanel.getSshService(), path);
+                }
                 return null;
             }
 
@@ -185,7 +202,7 @@ public class FileManagementController {
             protected void done() {
                 try {
                     get();
-                    JOptionPane.showMessageDialog(view, "文件删除成功！", "成功", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(view, "删除成功：共 " + filePaths.size() + " 个文件。", "成功", JOptionPane.INFORMATION_MESSAGE);
                     // Refresh the table
                     handleRefreshServerFiles();
                 } catch (Exception e) {
@@ -200,8 +217,8 @@ public class FileManagementController {
         JTable table = view.getServerFilesTable();
         RemoteMachinePanel remotePanel = view.getServerRemotePanel();
 
-        int selectedRow = table.getSelectedRow();
-        if (selectedRow < 0) {
+        int[] selectedRows = table.getSelectedRows();
+        if (selectedRows == null || selectedRows.length == 0) {
             JOptionPane.showMessageDialog(view, "请先选择一个文件。", "提示", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -210,25 +227,54 @@ public class FileManagementController {
             return;
         }
 
-        String filename = (String) table.getModel().getValueAt(selectedRow, 0);
-        String remotePath = "/tmp/iperf3/" + filename;
-
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("保存文件到本地");
-        chooser.setSelectedFile(new File(filename));
-        int result = chooser.showSaveDialog(view);
-        if (result != JFileChooser.APPROVE_OPTION) {
+        List<String> filenames = new ArrayList<>();
+        List<String> remotePaths = new ArrayList<>();
+        for (int viewRow : selectedRows) {
+            String filename = (String) table.getModel().getValueAt(viewRow, 0);
+            if (filename == null || filename.isBlank()) {
+                continue;
+            }
+            filenames.add(filename);
+            remotePaths.add("/tmp/iperf3/" + filename);
+        }
+        if (remotePaths.isEmpty()) {
+            JOptionPane.showMessageDialog(view, "请选择有效的文件。", "提示", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        File localFile = chooser.getSelectedFile();
+        File[] localTargets = new File[remotePaths.size()];
+        if (remotePaths.size() == 1) {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("保存文件到本地");
+            chooser.setSelectedFile(new File(filenames.get(0)));
+            int result = chooser.showSaveDialog(view);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            localTargets[0] = chooser.getSelectedFile();
+        } else {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("选择本地保存目录");
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            chooser.setAcceptAllFileFilterUsed(false);
+            int result = chooser.showOpenDialog(view);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            File dir = chooser.getSelectedFile();
+            for (int i = 0; i < filenames.size(); i++) {
+                localTargets[i] = new File(dir, filenames.get(i));
+            }
+        }
         view.getRefreshServerButton().setEnabled(false);
         view.getDeleteServerFileButton().setEnabled(false);
 
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                service.downloadFile(remotePanel.getSshService(), remotePath, localFile.getAbsolutePath());
+                for (int i = 0; i < remotePaths.size(); i++) {
+                    service.downloadFile(remotePanel.getSshService(), remotePaths.get(i), localTargets[i].getAbsolutePath());
+                }
                 return null;
             }
 
@@ -237,7 +283,7 @@ public class FileManagementController {
                 try {
                     get();
                     JOptionPane.showMessageDialog(view,
-                            "下载成功: " + localFile.getAbsolutePath(),
+                            "下载成功：共 " + remotePaths.size() + " 个文件。",
                             "成功",
                             JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception e) {
