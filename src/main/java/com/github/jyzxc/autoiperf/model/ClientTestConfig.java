@@ -20,5 +20,8 @@ public class ClientTestConfig {
     private Integer bandwidth;              // Bandwidth limit in bits/sec (optional)
     private Integer packetSize;             // Packet size in bytes (optional)
     private Boolean reverse;                // Reverse test (server sends, client receives)
+    private Boolean bidirectionalTest;      // Bidirectional test (both send and receive)
+    private String targetHost2;             // Second target host for bidirectional test (optional)
+    private int targetPort2;                // Second target port for bidirectional test (optional)
 }
 

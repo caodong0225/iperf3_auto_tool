@@ -126,17 +126,19 @@ public class FileManagementService {
         // Determine file type from filename
         if (filename.startsWith("server-")) {
             fileInfo.setType("server");
-        } else if (filename.startsWith("test_")) {
+        } else if (filename.startsWith("test_") || filename.startsWith("send_") || filename.startsWith("receive_")) {
             fileInfo.setType("client");
         } else {
             fileInfo.setType("client"); // Default to client
         }
         
         // Extract timestamp from filename if available
-        if (filename.startsWith("test_")) {
-            // Pattern: test_2026-01-09T00-03-37-6869426_f0e96ce7.json or test_20260109_001245_aa116982.json
+        if (filename.startsWith("test_") || filename.startsWith("send_") || filename.startsWith("receive_")) {
+            // Pattern: test_20260109_001245_aa116982.json or send_20260109_001245_aa116982.json or receive_20260109_001245_aa116982.json
             try {
-                String timestampPart = filename.substring(5); // Remove "test_"
+                String prefix = filename.startsWith("test_") ? "test_" : 
+                               filename.startsWith("send_") ? "send_" : "receive_";
+                String timestampPart = filename.substring(prefix.length()); // Remove prefix
                 int underscoreIndex = timestampPart.indexOf('_');
                 if (underscoreIndex > 0) {
                     timestampPart = timestampPart.substring(0, underscoreIndex);

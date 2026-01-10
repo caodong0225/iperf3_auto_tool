@@ -15,6 +15,9 @@ public class ClientControlPanel extends JPanel {
     private final JSpinner targetPortSpinner;
     private final JSpinner durationSpinner;
     private final JComboBox<String> protocolComboBox;
+    private final JCheckBox bidirectionalCheckBox;
+    private final JTextField targetIp2Field;
+    private final JSpinner targetPort2Spinner;
     private final JButton startTestButton;
     private final JTable clientProcessesTable;
     private final JButton stopTestButton;
@@ -66,8 +69,44 @@ public class ClientControlPanel extends JPanel {
         protocolComboBox = new JComboBox<>(new String[]{"TCP", "UDP"});
         parametersPanel.add(protocolComboBox, gbc);
 
-        // Row 4: Start button
-        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 4; gbc.weightx = 1.0;
+        // Row 4: Bidirectional test checkbox
+        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 1; gbc.weightx = 0;
+        bidirectionalCheckBox = new JCheckBox("是否双向测试");
+        bidirectionalCheckBox.setToolTipText("启用后将同时启动发送和接收两个测试进程");
+        parametersPanel.add(bidirectionalCheckBox, gbc);
+        
+        // Row 5: Target IP2 (only visible when bidirectional is checked)
+        gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 1; gbc.weightx = 0;
+        JLabel targetIp2Label = new JLabel("目标IP2:");
+        targetIp2Label.setEnabled(false);
+        parametersPanel.add(targetIp2Label, gbc);
+        gbc.gridx = 1; gbc.gridy = 5; gbc.gridwidth = 3; gbc.weightx = 1.0;
+        targetIp2Field = new JTextField("");
+        targetIp2Field.setToolTipText("双向测试的第二个目标IP（留空则使用目标IP1）");
+        targetIp2Field.setEnabled(false);
+        parametersPanel.add(targetIp2Field, gbc);
+        
+        // Row 6: Target Port2 (only visible when bidirectional is checked)
+        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 1; gbc.weightx = 0;
+        JLabel targetPort2Label = new JLabel("目标端口2:");
+        targetPort2Label.setEnabled(false);
+        parametersPanel.add(targetPort2Label, gbc);
+        gbc.gridx = 1; gbc.gridy = 6; gbc.gridwidth = 1; gbc.weightx = 0;
+        targetPort2Spinner = new JSpinner(new SpinnerNumberModel(5201, 1, 65535, 1));
+        targetPort2Spinner.setEnabled(false);
+        parametersPanel.add(targetPort2Spinner, gbc);
+        
+        // Add listener to enable/disable bidirectional fields
+        bidirectionalCheckBox.addActionListener(e -> {
+            boolean enabled = bidirectionalCheckBox.isSelected();
+            targetIp2Label.setEnabled(enabled);
+            targetIp2Field.setEnabled(enabled);
+            targetPort2Label.setEnabled(enabled);
+            targetPort2Spinner.setEnabled(enabled);
+        });
+
+        // Row 7: Start button
+        gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 4; gbc.weightx = 1.0;
         gbc.fill = GridBagConstraints.NONE;
         gbc.anchor = GridBagConstraints.CENTER;
         startTestButton = new JButton("开始新测试");

@@ -207,10 +207,29 @@ public class ClientControlController {
         int targetPort = (Integer) view.getTargetPortSpinner().getValue();
         int duration = (Integer) view.getDurationSpinner().getValue();
         String protocol = (String) view.getProtocolComboBox().getSelectedItem();
+        boolean bidirectional = view.getBidirectionalCheckBox().isSelected();
         String host = remoteMachinePanel.getHostField().getText();
         String selectedIp = remoteMachinePanel.getSelectedNicIp();
 
-        appendClientLog(String.format("开始客户端测试: 目标=%s:%d, 时长=%d秒, 协议=%s", targetIp, targetPort, duration, protocol));
+        // For bidirectional test, get second target IP and port
+        String targetIp2 = null;
+        int targetPort2 = targetPort; // Default to same port
+        if (bidirectional) {
+            String ip2Text = view.getTargetIp2Field().getText().trim();
+            if (!ip2Text.isEmpty()) {
+                targetIp2 = ip2Text;
+            } else {
+                targetIp2 = targetIp; // Use same IP if not specified
+            }
+            targetPort2 = (Integer) view.getTargetPort2Spinner().getValue();
+        }
+
+        if (bidirectional) {
+            appendClientLog(String.format("开始双向客户端测试: 发送=%s:%d, 接收=%s:%d, 时长=%d秒, 协议=%s", 
+                    targetIp, targetPort, targetIp2, targetPort2, duration, protocol));
+        } else {
+            appendClientLog(String.format("开始客户端测试: 目标=%s:%d, 时长=%d秒, 协议=%s", targetIp, targetPort, duration, protocol));
+        }
         view.getStartTestButton().setEnabled(false);
         view.getStartTestButton().setText("正在测试...");
 
@@ -222,14 +241,21 @@ public class ClientControlController {
         clientProfile.setPassword(""); // Not needed for test execution
 
         // Build ClientTestConfig
-        ClientTestConfig config = ClientTestConfig.builder()
+        ClientTestConfig.Builder configBuilder = ClientTestConfig.builder()
                 .sourceMachineProfile(clientProfile)
                 .sourceBindAddress(selectedIp)
                 .targetHost(targetIp)
                 .targetPort(targetPort)
                 .duration(duration)
                 .protocol(protocol)
-                .build();
+                .bidirectionalTest(bidirectional);
+        
+        if (bidirectional) {
+            configBuilder.targetHost2(targetIp2)
+                        .targetPort2(targetPort2);
+        }
+        
+        ClientTestConfig config = configBuilder.build();
 
         new SwingWorker<ClientTestInstance, Void>() {
             @Override
