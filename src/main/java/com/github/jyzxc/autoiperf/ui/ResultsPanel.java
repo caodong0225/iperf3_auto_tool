@@ -36,7 +36,10 @@ public class ResultsPanel extends JPanel {
         clientScrollPane.setPreferredSize(new Dimension(400, 200));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, serverScrollPane, clientScrollPane);
-        splitPane.setResizeWeight(0.4); 
+        splitPane.setResizeWeight(0.5); 
+        splitPane.setDividerSize(5);
+        splitPane.setOneTouchExpandable(true);
+        splitPane.setContinuousLayout(true);
 
         add(splitPane, BorderLayout.CENTER);
     }

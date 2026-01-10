@@ -24,9 +24,7 @@ public class ServerControlPanel extends JPanel {
         // Top part: Connection and Start controls
         JPanel topPanel = new JPanel(new BorderLayout(5, 5));
         remoteMachinePanel = new RemoteMachinePanel("服务端主机");
-        // Limit the height of RemoteMachinePanel to leave space for table
-        remoteMachinePanel.setPreferredSize(new Dimension(Integer.MAX_VALUE, 200));
-        remoteMachinePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 250));
+        remoteMachinePanel.setPreferredSize(new Dimension(520, 220));
         topPanel.add(remoteMachinePanel, BorderLayout.CENTER);
 
         JPanel startControlsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -36,8 +34,9 @@ public class ServerControlPanel extends JPanel {
         startServerButton = new JButton("开启新服务");
         startControlsPanel.add(startServerButton);
         topPanel.add(startControlsPanel, BorderLayout.SOUTH);
-        // Limit top panel height
-        topPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 280));
+        JScrollPane topScrollPane = new JScrollPane(topPanel);
+        topScrollPane.setBorder(new TitledBorder("连接与启动"));
+        topScrollPane.setPreferredSize(new Dimension(600, 280));
 
         // Center part: Table of running instances
         String[] columnNames = {"PID", "状态", "监听IP", "端口", "完整命令"};
@@ -65,9 +64,8 @@ public class ServerControlPanel extends JPanel {
         tableScrollPane.setBorder(new TitledBorder("活动的服务实例"));
         // Set minimum and preferred sizes to ensure table is visible
         tableScrollPane.setMinimumSize(new Dimension(400, 150));
-        tableScrollPane.setPreferredSize(new Dimension(600, 200));
-        tableScrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-
+        tableScrollPane.setPreferredSize(new Dimension(600, 250));
+        
         // Bottom part: Stop/Kill controls for selected instance
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         stopServerButton = new JButton("停止服务");
@@ -75,8 +73,18 @@ public class ServerControlPanel extends JPanel {
         bottomPanel.add(stopServerButton);
         bottomPanel.add(killServerButton);
 
-        add(topPanel, BorderLayout.NORTH);
-        add(tableScrollPane, BorderLayout.CENTER);
-        add(bottomPanel, BorderLayout.SOUTH);
+        JPanel tableContainer = new JPanel(new BorderLayout());
+        tableContainer.add(tableScrollPane, BorderLayout.CENTER);
+        tableContainer.add(bottomPanel, BorderLayout.SOUTH);
+
+        // Use JSplitPane for resizable sections
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topScrollPane, tableContainer);
+        splitPane.setResizeWeight(0.4);
+        splitPane.setDividerSize(5);
+        splitPane.setOneTouchExpandable(true);
+        splitPane.setContinuousLayout(true);
+        SwingUtilities.invokeLater(() -> splitPane.setDividerLocation(0.45));
+
+        add(splitPane, BorderLayout.CENTER);
     }
 }

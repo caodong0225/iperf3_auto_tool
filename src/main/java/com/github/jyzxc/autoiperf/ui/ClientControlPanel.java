@@ -27,7 +27,6 @@ public class ClientControlPanel extends JPanel {
         remoteMachinePanel = new RemoteMachinePanel("客户端主机");
         JScrollPane connectionScrollPane = new JScrollPane(remoteMachinePanel);
         connectionScrollPane.setBorder(new TitledBorder("连接配置"));
-        connectionScrollPane.setMinimumSize(new Dimension(400, 180));
         connectionScrollPane.setPreferredSize(new Dimension(500, 220));
         
         // Part 2: Test parameters panel
@@ -77,7 +76,6 @@ public class ClientControlPanel extends JPanel {
         
         JScrollPane parametersScrollPane = new JScrollPane(parametersPanel);
         parametersScrollPane.setBorder(new TitledBorder("测试参数"));
-        parametersScrollPane.setMinimumSize(new Dimension(400, 180));
         parametersScrollPane.setPreferredSize(new Dimension(500, 200));
 
         // Part 3: Table of running/recent tests
@@ -103,7 +101,6 @@ public class ClientControlPanel extends JPanel {
         
         JScrollPane tableScrollPane = new JScrollPane(clientProcessesTable);
         tableScrollPane.setBorder(new TitledBorder("活动的客户端测试"));
-        tableScrollPane.setMinimumSize(new Dimension(400, 150));
         tableScrollPane.setPreferredSize(new Dimension(600, 200));
 
         JPanel stopButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -120,14 +117,16 @@ public class ClientControlPanel extends JPanel {
         topSplitPane.setResizeWeight(0.5);
         topSplitPane.setDividerSize(5);
         topSplitPane.setOneTouchExpandable(true);
-        topSplitPane.setMinimumSize(new Dimension(400, 200));
+        topSplitPane.setContinuousLayout(true);
+        SwingUtilities.invokeLater(() -> topSplitPane.setDividerLocation(0.55));
         
         // Second split: Top section and Table
         JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplitPane, bottomContainer);
         mainSplitPane.setResizeWeight(0.5);
         mainSplitPane.setDividerSize(5);
         mainSplitPane.setOneTouchExpandable(true);
-        mainSplitPane.setMinimumSize(new Dimension(400, 300));
+        mainSplitPane.setContinuousLayout(true);
+        SwingUtilities.invokeLater(() -> mainSplitPane.setDividerLocation(0.65));
 
         add(mainSplitPane, BorderLayout.CENTER);
     }

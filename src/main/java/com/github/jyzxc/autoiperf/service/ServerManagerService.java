@@ -22,19 +22,25 @@ public class ServerManagerService {
     public IperfServerInstance startServer(SshService sshService, String host, int port, String bindAddress) throws Exception {
         log.info("Attempting to start iperf3 server on host {}, binding to {}:{}", host, bindAddress, port);
 
-        // Ensure /tmp/iperf3 directory exists
-        String mkdirCommand = "mkdir -p /tmp/iperf3";
-        sshService.executeCommand(mkdirCommand, 3000);
-        
-        String remoteLogFile = String.format("/tmp/iperf3/server-%s.json", UUID.randomUUID());
+        // Proactively detect port conflicts (we no longer keep a JSON logfile to read startup errors from).
+        PortInfo existingPortOwner = findPortOwner(sshService, port);
+        if (existingPortOwner != null) {
+            log.info("Port {} is in use by process '{}' (PID: {})",
+                    port, existingPortOwner.processName, existingPortOwner.pid);
+            throw new PortInUseByIperfException(
+                    String.format("端口 %d 已被进程 '%s' (PID: %s) 占用",
+                            port, existingPortOwner.processName, existingPortOwner.pid),
+                    existingPortOwner.processName,
+                    existingPortOwner.pid
+            );
+        }
 
         // Use a more reliable method to start iperf3 and get PID
         // The command uses nohup and redirects output to ensure it doesn't block
         String command = String.format(
-                "nohup iperf3 -s -p %d -B %s -1 -J --logfile %s > /dev/null 2>&1 & echo $!",
+                "nohup iperf3 -s -p %d -B %s > /dev/null 2>&1 & echo $!",
                 port,
-                bindAddress,
-                remoteLogFile
+                bindAddress
         );
 
         log.debug("Executing remote command: {}", command);
@@ -57,14 +63,7 @@ public class ServerManagerService {
         String pidStr = output.trim().replaceAll("[^0-9]", "");
         if (pidStr.isEmpty() || !pidStr.matches("\\d+")) {
             log.error("Failed to extract valid PID from output: '{}'", output);
-            // Attempt to read the log file for a more specific error
-            try {
-                String errorLog = sshService.executeCommand("cat " + remoteLogFile, 2000);
-                sshService.executeCommand("rm " + remoteLogFile, 2000); // Cleanup
-                throw new Exception("Failed to get PID for iperf3. Output: '" + output + "'. Error log: " + errorLog);
-            } catch (Exception e) {
-                throw new Exception("Failed to get PID for iperf3. Output: '" + output + "'. Could not read error log: " + e.getMessage());
-            }
+            throw new Exception("Failed to get PID for iperf3. Output: '" + output + "'");
         }
 
         log.info("iPerf3 server process created with PID: {}. Verifying startup...", pidStr);
@@ -90,53 +89,19 @@ public class ServerManagerService {
             }
             
             if (psCheckOutput == null || !psCheckOutput.contains(pidStr)) {
-                // Process died. Check the log file for the reason.
-                log.warn("Process {} is not running. Checking error log...", pidStr);
-                String errorLog = null;
-                try {
-                    errorLog = sshService.executeCommand("cat " + remoteLogFile, 2000);
-                    log.debug("Error log content: {}", errorLog);
-                } catch (Exception e) {
-                    log.warn("Could not read error log: {}", e.getMessage());
+                // Process died. We don't keep a JSON logfile anymore; check if the port is now occupied.
+                log.warn("Process {} is not running. Checking port owner for {}...", pidStr, port);
+                PortInfo portInfo = findPortOwner(sshService, port);
+                if (portInfo != null) {
+                    log.info("Port {} is in use by process '{}' (PID: {})",
+                            port, portInfo.processName, portInfo.pid);
+                    throw new PortInUseByIperfException(
+                            String.format("端口 %d 已被进程 '%s' (PID: %s) 占用",
+                                    port, portInfo.processName, portInfo.pid),
+                            portInfo.processName,
+                            portInfo.pid
+                    );
                 }
-                
-                // Cleanup log file
-                try {
-                    sshService.executeCommand("rm " + remoteLogFile, 2000);
-                } catch (Exception e) {
-                    log.debug("Could not remove log file: {}", e.getMessage());
-                }
-                
-                // Check for specific error types
-                if (errorLog != null && errorLog.contains("\"error\"")) {
-                    String errorMessage = extractErrorFromJson(errorLog);
-                    log.error("iPerf3 server failed to start: {}", errorMessage);
-                    
-                    // Check if it's a port in use error
-                    if (errorMessage.contains("Address already in use") || 
-                        errorMessage.contains("unable to start listener")) {
-                        // Find which process is using the port
-                        PortInfo portInfo = findPortOwner(sshService, port);
-                        if (portInfo != null) {
-                            log.info("Port {} is in use by process '{}' (PID: {})", 
-                                    port, portInfo.processName, portInfo.pid);
-                            throw new PortInUseByIperfException(
-                                    String.format("端口 %d 已被进程 '%s' (PID: %s) 占用", 
-                                            port, portInfo.processName, portInfo.pid),
-                                    portInfo.processName,
-                                    portInfo.pid);
-                        } else {
-                            throw new PortInUseByIperfException(
-                                    String.format("端口 %d 已被占用，但无法确定占用进程", port),
-                                    "unknown",
-                                    "unknown");
-                        }
-                    }
-                    
-                    // Other errors
-                    throw new Exception("iPerf3 server failed to start: " + errorMessage);
-                }
-                
                 throw new Exception("iPerf3 process with PID " + pidStr + " died unexpectedly.");
             }
             
@@ -229,24 +194,10 @@ public class ServerManagerService {
         // Process is dead, cleanup and throw error
         try {
             sshService.executeCommand("kill " + pidStr + " 2>/dev/null || true", 2000);
-            sshService.executeCommand("rm " + remoteLogFile + " 2>/dev/null || true", 2000);
         } catch (Exception e) {
             log.warn("Cleanup commands failed: {}", e.getMessage());
         }
         throw new Exception("iPerf3 server startup timed out. Process verification failed.");
-    }
-
-    private String extractErrorFromJson(String json) {
-        try {
-            Pattern pattern = Pattern.compile("\"error\"\\s*:\\s*\"([^\"]+)\"");
-            Matcher matcher = pattern.matcher(json);
-            if (matcher.find()) {
-                return matcher.group(1);
-            }
-        } catch (Exception e) {
-            log.warn("Could not parse error from JSON, returning raw content.", e);
-        }
-        return json;
     }
     
     /**

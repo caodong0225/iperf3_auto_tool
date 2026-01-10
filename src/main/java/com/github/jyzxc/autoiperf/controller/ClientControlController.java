@@ -45,7 +45,7 @@ public class ClientControlController {
      * Start automatic refresh timer that updates the table every 10 seconds.
      */
     private void startAutoRefresh() {
-        refreshTimer = new Timer(10000, new ActionListener() {
+        refreshTimer = new Timer(2000, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
@@ -57,7 +57,7 @@ public class ClientControlController {
         });
         refreshTimer.setRepeats(true);
         refreshTimer.start();
-        log.info("Started auto-refresh timer for client test instances (every 10 seconds)");
+        log.info("Started auto-refresh timer for client test instances (every 2 seconds)");
     }
     
     /**

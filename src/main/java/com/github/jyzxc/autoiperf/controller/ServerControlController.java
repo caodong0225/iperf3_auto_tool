@@ -36,7 +36,7 @@ public class ServerControlController {
      * Start automatic refresh timer that updates the table every 10 seconds.
      */
     private void startAutoRefresh() {
-        refreshTimer = new Timer(10000, new ActionListener() {
+        refreshTimer = new Timer(2000, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 RemoteMachinePanel remoteMachinePanel = view.getRemoteMachinePanel();
@@ -48,7 +48,7 @@ public class ServerControlController {
         });
         refreshTimer.setRepeats(true);
         refreshTimer.start();
-        log.info("Started auto-refresh timer for server instances (every 10 seconds)");
+        log.info("Started auto-refresh timer for server instances (every 2 seconds)");
     }
     
     /**
@@ -139,7 +139,7 @@ public class ServerControlController {
                     // Only show error dialog for manual refresh, not auto-refresh
                     if (!isAutoRefresh) {
                         appendServerLog(String.format("发现服务实例失败: %s", e.getMessage()));
-                        JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(view, "发现服务实例失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                     } else {
                         log.debug("Auto-refresh failed: {}", e.getMessage());
                     }
@@ -185,7 +185,7 @@ public class ServerControlController {
                     appendServerLog(String.format("✓ iperf3 服务启动成功: PID=%d, 端口=%d, 绑定IP=%s", 
                             instance.getPid(), instance.getListeningPort(), instance.getBoundIp()));
                     SwingUtilities.invokeLater(() -> {
-                        addInstanceToTable(instance);
+                    addInstanceToTable(instance);
                         log.info("Instance added to table. Current row count: {}", 
                                 ((DefaultTableModel) view.getServerInstancesTable().getModel()).getRowCount());
                     });
@@ -228,7 +228,7 @@ public class ServerControlController {
                     } else {
                         // Other errors
                         appendServerLog(String.format("✗ 启动服务失败: %s", e.getMessage()));
-                        JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(view, "启动服务失败: \n" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                     }
                 } finally {
                     SwingUtilities.invokeLater(() -> {
@@ -284,8 +284,8 @@ public class ServerControlController {
                                 "无法终止占用进程: \n" + e.getMessage(), 
                                 "错误", 
                                 JOptionPane.ERROR_MESSAGE);
-                        view.getStartServerButton().setEnabled(true);
-                        view.getStartServerButton().setText("开启新服务");
+                    view.getStartServerButton().setEnabled(true);
+                    view.getStartServerButton().setText("开启新服务");
                     });
                 }
             }
@@ -405,7 +405,7 @@ public class ServerControlController {
         };
         model.addRow(rowData);
         log.info("Added row to table: PID={}, Status={}, Port={}, BindIP={}, row count now={}", 
-                instance.getPid(), 
+                instance.getPid(),
                 instance.getStatus(),
                 instance.getListeningPort(),
                 instance.getBoundIp(),

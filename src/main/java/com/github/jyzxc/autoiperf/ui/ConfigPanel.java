@@ -25,15 +25,13 @@ public class ConfigPanel extends JPanel {
         mainSplitPane.setResizeWeight(0.5);
         mainSplitPane.setDividerSize(5);
         mainSplitPane.setOneTouchExpandable(true);
+        mainSplitPane.setContinuousLayout(true);
 
         // The top part for Server Management
         serverControlPanel = new ServerControlPanel();
-        // Ensure server panel has minimum size
-        serverControlPanel.setMinimumSize(new Dimension(400, 300));
 
         // The bottom part for Client Management
         clientControlPanel = new ClientControlPanel();
-        clientControlPanel.setMinimumSize(new Dimension(400, 300));
 
         mainSplitPane.setTopComponent(serverControlPanel);
         mainSplitPane.setBottomComponent(clientControlPanel);
