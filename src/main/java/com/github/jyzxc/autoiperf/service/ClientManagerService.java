@@ -42,11 +42,13 @@ public class ClientManagerService {
         sshService.executeCommand(mkdirCommand, 3000);
         log.debug("Ensured /tmp/iperf3 directory exists");
 
-        // Build iperf3 client command
+        // Build iperf3 client command (includes --logfile for JSON output)
         String command = buildIperf3ClientCommand(config, remoteJsonFile);
         log.debug("Executing remote command: {}", command);
 
         // Start command in background and get PID
+        // Use --logfile parameter to save JSON output directly (not affected by stdout/stderr redirection)
+        // Redirect stdout/stderr to /dev/null to avoid cluttering terminal output
         String bgCommand = String.format("nohup %s > /dev/null 2>&1 & echo $!", command);
         String output = null;
         try {
@@ -103,6 +105,7 @@ public class ClientManagerService {
 
     /**
      * Build the iperf3 client command string based on configuration.
+     * Uses --logfile parameter to save JSON output to file (more reliable than shell redirection).
      */
     private String buildIperf3ClientCommand(ClientTestConfig config, String jsonFilePath) {
         StringBuilder cmd = new StringBuilder("iperf3 -c ");
@@ -110,6 +113,7 @@ public class ClientManagerService {
         cmd.append(" -p ").append(config.getTargetPort());
         cmd.append(" -t ").append(config.getDuration());
         cmd.append(" -J"); // JSON output format
+        cmd.append(" --logfile ").append(jsonFilePath); // Use --logfile to save JSON output directly
 
         // Protocol
         if ("UDP".equalsIgnoreCase(config.getProtocol())) {
@@ -144,9 +148,6 @@ public class ClientManagerService {
         if (config.getSourceBindAddress() != null && !config.getSourceBindAddress().isEmpty()) {
             cmd.append(" -B ").append(config.getSourceBindAddress());
         }
-
-        // Redirect JSON output to file
-        cmd.append(" > ").append(jsonFilePath).append(" 2>&1");
 
         return cmd.toString();
     }
