@@ -10,10 +10,11 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import java.awt.Container;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ServerControlController {
 
@@ -23,6 +24,8 @@ public class ServerControlController {
     private final ServerManagerService service;
     private final ResultsPanel resultsPanel;
     private Timer refreshTimer;
+    // Track current instances in table by PID for incremental updates
+    private final Map<Integer, IperfServerInstance> currentInstances = new HashMap<>();
 
     public ServerControlController(ServerControlPanel view, ServerManagerService service, ResultsPanel resultsPanel) {
         this.view = view;
@@ -404,7 +407,9 @@ public class ServerControlController {
                 instance.getCommandLine() != null ? instance.getCommandLine() : "N/A"
         };
         model.addRow(rowData);
-        log.info("Added row to table: PID={}, Status={}, Port={}, BindIP={}, row count now={}", 
+        // Update currentInstances map
+        currentInstances.put(instance.getPid(), instance);
+        log.debug("Added row to table: PID={}, Status={}, Port={}, BindIP={}, row count now={}", 
                 instance.getPid(),
                 instance.getStatus(),
                 instance.getListeningPort(),
@@ -416,87 +421,93 @@ public class ServerControlController {
         view.getServerInstancesTable().repaint();
     }
 
-    private void updateInstanceTable(List<IperfServerInstance> instances) {
-        log.info("Attempting to update table with {} instances.", instances.size());
+    /**
+     * Incrementally update the instance table: only add new instances and remove disappeared ones.
+     */
+    private void updateInstanceTable(List<IperfServerInstance> discoveredInstances) {
+        log.debug("Incremental update: discovered {} instances, current table has {}", 
+                discoveredInstances.size(), currentInstances.size());
+        
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        Map<Integer, IperfServerInstance> discoveredMap = new HashMap<>();
         
-        log.info("Table model row count before update: {}", model.getRowCount());
-        model.setRowCount(0); // Clear table
-        log.info("Table model row count after clearing: {}", model.getRowCount());
-
-        for (IperfServerInstance instance : instances) {
-            log.info("Adding instance to table: PID={}, Status={}, Port={}, BindIP={}", 
-                    instance.getPid(), instance.getStatus(), instance.getListeningPort(), instance.getBoundIp());
-            addInstanceToTable(instance);
+        // Build map of discovered instances by PID
+        for (IperfServerInstance instance : discoveredInstances) {
+            discoveredMap.put(instance.getPid(), instance);
         }
         
-        log.info("Table model row count after adding all instances: {}", model.getRowCount());
-        
-        // Force UI refresh - already on EDT, but ensure visibility
-        JTable table = view.getServerInstancesTable();
-        table.revalidate();
-        table.repaint();
-        
-        // Ensure table columns are visible by resetting column widths if needed
-        if (model.getRowCount() > 0) {
-            table.getColumnModel().getColumn(0).setPreferredWidth(80);  // PID
-            table.getColumnModel().getColumn(1).setPreferredWidth(80);  // 状态
-            table.getColumnModel().getColumn(2).setPreferredWidth(120); // 监听IP
-            table.getColumnModel().getColumn(3).setPreferredWidth(80);  // 端口
-            table.getColumnModel().getColumn(4).setPreferredWidth(300); // 完整命令
-            table.sizeColumnsToFit(-1);
-        }
-        
-        // Log table visibility and size for debugging
-        log.info("Table is visible: {}, showing: {}, size: {}x{}, row height: {}", 
-                table.isVisible(), 
-                table.isShowing(),
-                table.getWidth(),
-                table.getHeight(),
-                table.getRowHeight());
-        
-        // Log scroll pane info
-        Container parent = table.getParent();
-        if (parent instanceof JViewport) {
-            JViewport viewport = (JViewport) parent;
-            log.info("Viewport size: {}x{}", viewport.getWidth(), viewport.getHeight());
-            Container scrollPane = viewport.getParent();
-            if (scrollPane instanceof JScrollPane) {
-                JScrollPane sp = (JScrollPane) scrollPane;
-                log.info("ScrollPane size: {}x{}, visible: {}, preferred: {}x{}, min: {}x{}", 
-                        sp.getWidth(),
-                        sp.getHeight(),
-                        sp.isVisible(),
-                        sp.getPreferredSize().width,
-                        sp.getPreferredSize().height,
-                        sp.getMinimumSize().width,
-                        sp.getMinimumSize().height);
+        // Find instances that disappeared (in currentInstances but not in discoveredMap)
+        for (Integer pid : currentInstances.keySet()) {
+            if (!discoveredMap.containsKey(pid)) {
+                // This instance disappeared, remove from table
+                removeInstanceFromTable(pid);
+                log.debug("Removed disappeared instance: PID={}", pid);
             }
         }
         
-        // Force layout update if table height is 0
-        if (table.getHeight() == 0) {
-            log.warn("Table height is 0, forcing layout update...");
-            SwingUtilities.invokeLater(() -> {
-                Container root = table.getTopLevelAncestor();
-                if (root != null) {
-                    root.validate();
-                    root.repaint();
+        // Find new instances (in discoveredMap but not in currentInstances)
+        for (IperfServerInstance instance : discoveredInstances) {
+            if (!currentInstances.containsKey(instance.getPid())) {
+                // This is a new instance, add to table
+                addInstanceToTable(instance);
+                log.debug("Added new instance: PID={}", instance.getPid());
+            } else {
+                // Instance exists, check if status changed and update if needed
+                IperfServerInstance existing = currentInstances.get(instance.getPid());
+                if (existing.getStatus() != instance.getStatus()) {
+                    updateInstanceStatus(instance);
+                    log.debug("Updated instance status: PID={}, old={}, new={}", 
+                            instance.getPid(), existing.getStatus(), instance.getStatus());
                 }
-                // Also validate the scroll pane
-                if (parent instanceof JViewport) {
-                    Container scrollPane = parent.getParent();
-                    if (scrollPane instanceof JScrollPane) {
-                        ((JScrollPane) scrollPane).validate();
-                        ((JScrollPane) scrollPane).repaint();
-                    }
-                }
-            });
+            }
+        }
+        
+        // Update currentInstances map
+        currentInstances.clear();
+        currentInstances.putAll(discoveredMap);
+        
+        // Force UI refresh
+        JTable table = view.getServerInstancesTable();
+        table.revalidate();
+        table.repaint();
+    }
+    
+    /**
+     * Remove an instance from the table by PID.
+     */
+    private void removeInstanceFromTable(int pid) {
+        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            Integer rowPid = (Integer) model.getValueAt(i, 0);
+            if (rowPid != null && rowPid == pid) {
+                model.removeRow(i);
+                currentInstances.remove(pid);
+                log.debug("Removed row {} for PID {}", i, pid);
+                return;
+            }
+        }
+    }
+    
+    /**
+     * Update the status of an existing instance in the table.
+     */
+    private void updateInstanceStatus(IperfServerInstance instance) {
+        DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            Integer rowPid = (Integer) model.getValueAt(i, 0);
+            if (rowPid != null && rowPid == instance.getPid()) {
+                // Update status column (index 1)
+                model.setValueAt(instance.getStatus().toString(), i, 1);
+                // Update currentInstances map
+                currentInstances.put(instance.getPid(), instance);
+                return;
+            }
         }
     }
 
     private void clearInstanceTable() {
         DefaultTableModel model = (DefaultTableModel) view.getServerInstancesTable().getModel();
         model.setRowCount(0);
+        currentInstances.clear();
     }
 }

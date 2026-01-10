@@ -17,7 +17,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ClientControlController {
 
@@ -28,6 +30,8 @@ public class ClientControlController {
     private final ResultsPanel resultsPanel;
     private final ServerControlPanel serverControlPanel; // Reference to server panel to get selected instance
     private Timer refreshTimer;
+    // Track current instances in table by PID for incremental updates
+    private final Map<Integer, ClientTestInstance> currentInstances = new HashMap<>();
 
     public ClientControlController(ClientControlPanel view, 
                                    ClientManagerService clientManagerService,
@@ -326,36 +330,102 @@ public class ClientControlController {
                 instance.getCommandLine() != null ? instance.getCommandLine() : "N/A"
         };
         model.addRow(rowData);
-        log.info("Added row to table: PID={}, row count now={}", instance.getPid(), model.getRowCount());
+        // Update currentInstances map
+        currentInstances.put(instance.getPid(), instance);
+        log.debug("Added row to table: PID={}, row count now={}", instance.getPid(), model.getRowCount());
         
         // Force table refresh
         view.getClientProcessesTable().revalidate();
         view.getClientProcessesTable().repaint();
     }
 
-    private void updateTestTable(List<ClientTestInstance> instances) {
-        log.info("Attempting to update test table with {} instances.", instances.size());
-        DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
+    /**
+     * Incrementally update the test table: only add new instances and remove disappeared ones.
+     */
+    private void updateTestTable(List<ClientTestInstance> discoveredInstances) {
+        log.debug("Incremental update: discovered {} instances, current table has {}", 
+                discoveredInstances.size(), currentInstances.size());
         
-        model.setRowCount(0); // Clear table
-
-        for (ClientTestInstance instance : instances) {
-            model.addRow(new Object[]{
-                    instance.getPid(),
-                    instance.getStatus() != null ? instance.getStatus().toString() : "UNKNOWN",
-                    instance.getTargetHost() != null ? instance.getTargetHost() : "N/A",
-                    instance.getTargetPort(),
-                    instance.getCommandLine() != null ? instance.getCommandLine() : "N/A"
-            });
+        DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
+        Map<Integer, ClientTestInstance> discoveredMap = new HashMap<>();
+        
+        // Build map of discovered instances by PID
+        for (ClientTestInstance instance : discoveredInstances) {
+            discoveredMap.put(instance.getPid(), instance);
         }
         
+        // Find instances that disappeared (in currentInstances but not in discoveredMap)
+        for (Integer pid : currentInstances.keySet()) {
+            if (!discoveredMap.containsKey(pid)) {
+                // This instance disappeared, remove from table
+                removeInstanceFromTable(pid);
+                log.debug("Removed disappeared instance: PID={}", pid);
+            }
+        }
+        
+        // Find new instances (in discoveredMap but not in currentInstances)
+        for (ClientTestInstance instance : discoveredInstances) {
+            if (!currentInstances.containsKey(instance.getPid())) {
+                // This is a new instance, add to table
+                addInstanceToTable(instance);
+                log.debug("Added new instance: PID={}", instance.getPid());
+            } else {
+                // Instance exists, check if status changed and update if needed
+                ClientTestInstance existing = currentInstances.get(instance.getPid());
+                if (existing.getStatus() != instance.getStatus()) {
+                    updateInstanceStatus(instance);
+                    log.debug("Updated instance status: PID={}, old={}, new={}", 
+                            instance.getPid(), existing.getStatus(), instance.getStatus());
+                }
+            }
+        }
+        
+        // Update currentInstances map
+        currentInstances.clear();
+        currentInstances.putAll(discoveredMap);
+        
+        // Force UI refresh
         view.getClientProcessesTable().revalidate();
         view.getClientProcessesTable().repaint();
+    }
+    
+    /**
+     * Remove an instance from the table by PID.
+     */
+    private void removeInstanceFromTable(int pid) {
+        DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            Integer rowPid = (Integer) model.getValueAt(i, 0);
+            if (rowPid != null && rowPid == pid) {
+                model.removeRow(i);
+                currentInstances.remove(pid);
+                log.debug("Removed row {} for PID {}", i, pid);
+                return;
+            }
+        }
+    }
+    
+    /**
+     * Update the status of an existing instance in the table.
+     */
+    private void updateInstanceStatus(ClientTestInstance instance) {
+        DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            Integer rowPid = (Integer) model.getValueAt(i, 0);
+            if (rowPid != null && rowPid == instance.getPid()) {
+                // Update status column (index 1)
+                model.setValueAt(instance.getStatus().toString(), i, 1);
+                // Update currentInstances map
+                currentInstances.put(instance.getPid(), instance);
+                return;
+            }
+        }
     }
 
     private void clearTestTable() {
         DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
         model.setRowCount(0);
+        currentInstances.clear();
     }
 }
 
