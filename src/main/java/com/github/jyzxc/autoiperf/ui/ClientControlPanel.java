@@ -64,7 +64,8 @@ public class ClientControlPanel extends JPanel {
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 1; gbc.weightx = 0;
         parametersPanel.add(new JLabel("时长(秒):"), gbc);
         gbc.gridx = 1; gbc.gridy = 2; gbc.gridwidth = 1; gbc.weightx = 0;
-        durationSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 3600, 1));
+        // Remove maximum limit to allow very large numbers
+        durationSpinner = new JSpinner(new SpinnerNumberModel(10, 1, null, 1));
         parametersPanel.add(durationSpinner, gbc);
 
         // Row 3: Protocol
