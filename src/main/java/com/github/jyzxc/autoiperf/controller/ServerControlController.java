@@ -23,7 +23,6 @@ public class ServerControlController {
 
     private final ServerControlPanel view;
     private final ServerManagerService service;
-    private final ResultsPanel resultsPanel;
     private Timer refreshTimer;
     // Track current instances in table by PID for incremental updates
     private final Map<Integer, IperfServerInstance> currentInstances = new HashMap<>();
@@ -31,7 +30,7 @@ public class ServerControlController {
     public ServerControlController(ServerControlPanel view, ServerManagerService service, ResultsPanel resultsPanel) {
         this.view = view;
         this.service = service;
-        this.resultsPanel = resultsPanel;
+        // resultsPanel parameter kept for backward compatibility but not used
         addListeners();
         startAutoRefresh();
     }
@@ -66,13 +65,13 @@ public class ServerControlController {
     }
     
     /**
-     * Append log message to the server log area in the results panel.
+     * Append log message to the server log area in the server control panel.
      * @param message The log message to append
      */
     private void appendServerLog(String message) {
-        if (resultsPanel != null && resultsPanel.getServerLogArea() != null) {
+        if (view != null && view.getLogArea() != null) {
             SwingUtilities.invokeLater(() -> {
-                JTextArea logArea = resultsPanel.getServerLogArea();
+                JTextArea logArea = view.getLogArea();
                 String timestamp = java.time.LocalDateTime.now().format(
                         java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                 logArea.append(String.format("[%s] %s%n", timestamp, message));

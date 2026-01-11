@@ -15,9 +15,9 @@ import java.awt.*;
 public class MainFrame extends JFrame {
 
     @Getter
-    private ConfigPanel configPanel;
+    private ServerControlPanel serverControlPanel;
     @Getter
-    private ResultsPanel resultsPanel;
+    private ClientControlPanel clientControlPanel;
     @Getter
     private StatusBar statusBar;
 
@@ -51,22 +51,22 @@ public class MainFrame extends JFrame {
         fileManagementService = new FileManagementService();
 
         // 2. Instantiate Main Panels
-        configPanel = new ConfigPanel();
-        resultsPanel = new ResultsPanel();
+        serverControlPanel = new ServerControlPanel();
+        clientControlPanel = new ClientControlPanel();
         statusBar = new StatusBar();
         FileManagementPanel fileManagementPanel = new FileManagementPanel();
         
         // 3. Instantiate Controllers and link them to Views and Services
         serverControlController = new ServerControlController(
-                configPanel.getServerControlPanel(), 
+                serverControlPanel, 
                 serverManagerService,
-                resultsPanel);
+                null); // No longer using ResultsPanel
         
         clientControlController = new ClientControlController(
-                configPanel.getClientControlPanel(),
+                clientControlPanel,
                 clientManagerService,
-                resultsPanel,
-                configPanel.getServerControlPanel());
+                null, // No longer using ResultsPanel
+                serverControlPanel);
         
         fileManagementController = new FileManagementController(
                 fileManagementPanel,
@@ -77,12 +77,14 @@ public class MainFrame extends JFrame {
         // Create tabbed pane
         JTabbedPane tabbedPane = new JTabbedPane();
         
-        // Tab 1: Configuration and Results
-        JSplitPane configSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, configPanel, resultsPanel);
-        configSplitPane.setDividerLocation(550);
-        configSplitPane.setResizeWeight(0.5);
-        configSplitPane.setOneTouchExpandable(true);
-        tabbedPane.addTab("服务管理", configSplitPane);
+        // Tab 1: Client (left) and Server (right) side by side
+        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, clientControlPanel, serverControlPanel);
+        mainSplitPane.setDividerLocation(500);
+        mainSplitPane.setResizeWeight(0.5);
+        mainSplitPane.setOneTouchExpandable(true);
+        mainSplitPane.setContinuousLayout(true);
+        mainSplitPane.setDividerSize(8);
+        tabbedPane.addTab("服务管理", mainSplitPane);
         
         // Tab 2: File Management
         tabbedPane.addTab("文件管理", fileManagementPanel);
@@ -94,10 +96,14 @@ public class MainFrame extends JFrame {
         SwingUtilities.invokeLater(() -> {
             validate();
             repaint();
-            // Force ConfigPanel's internal split pane to layout properly
-            if (configPanel != null && configPanel.getServerControlPanel() != null) {
-                configPanel.getServerControlPanel().validate();
-                configPanel.getServerControlPanel().repaint();
+            // Force panels to layout properly
+            if (clientControlPanel != null) {
+                clientControlPanel.validate();
+                clientControlPanel.repaint();
+            }
+            if (serverControlPanel != null) {
+                serverControlPanel.validate();
+                serverControlPanel.repaint();
             }
         });
     }

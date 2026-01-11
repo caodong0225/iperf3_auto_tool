@@ -28,7 +28,6 @@ public class ClientControlController {
 
     private final ClientControlPanel view;
     private final ClientManagerService clientManagerService;
-    private final ResultsPanel resultsPanel;
     private final ServerControlPanel serverControlPanel; // Reference to server panel to get selected instance
     private Timer refreshTimer;
     // Track current instances in table by PID for incremental updates
@@ -40,7 +39,7 @@ public class ClientControlController {
                                    ServerControlPanel serverControlPanel) {
         this.view = view;
         this.clientManagerService = clientManagerService;
-        this.resultsPanel = resultsPanel;
+        // resultsPanel parameter kept for backward compatibility but not used
         this.serverControlPanel = serverControlPanel;
         addListeners();
         startAutoRefresh();
@@ -76,12 +75,12 @@ public class ClientControlController {
     }
 
     /**
-     * Append log message to the client result area in the results panel.
+     * Append log message to the client log area in the client control panel.
      */
     private void appendClientLog(String message) {
-        if (resultsPanel != null && resultsPanel.getClientResultArea() != null) {
+        if (view != null && view.getLogArea() != null) {
             SwingUtilities.invokeLater(() -> {
-                JTextArea logArea = resultsPanel.getClientResultArea();
+                JTextArea logArea = view.getLogArea();
                 String timestamp = LocalDateTime.now().format(
                         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                 logArea.append(String.format("[%s] %s%n", timestamp, message));

@@ -25,6 +25,7 @@ public class ClientControlPanel extends JPanel {
     private final JTable clientProcessesTable;
     private final JButton refreshButton;
     private final JButton stopTestButton;
+    private final JTextArea logArea;
 
     public ClientControlPanel() {
         setLayout(new BorderLayout(5, 5));
@@ -190,6 +191,17 @@ public class ClientControlPanel extends JPanel {
         bottomContainer.add(tableScrollPane, BorderLayout.CENTER);
         bottomContainer.add(stopButtonPanel, BorderLayout.SOUTH);
         
+        // Part 4: Log area
+        logArea = new JTextArea();
+        logArea.setEditable(false);
+        logArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        logArea.setLineWrap(true);
+        logArea.setWrapStyleWord(true);
+        logArea.setText("客户端测试日志将显示在这里...\n");
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        logScrollPane.setBorder(new TitledBorder("客户端日志"));
+        logScrollPane.setPreferredSize(new Dimension(500, 200));
+        
         // Use JSplitPane for resizable sections
         // First split: Connection and Parameters
         JSplitPane topSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, connectionScrollPane, parametersScrollPane);
@@ -199,13 +211,21 @@ public class ClientControlPanel extends JPanel {
         topSplitPane.setContinuousLayout(true);
         SwingUtilities.invokeLater(() -> topSplitPane.setDividerLocation(0.55));
         
-        // Second split: Top section and Table
-        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplitPane, bottomContainer);
-        mainSplitPane.setResizeWeight(0.5);
+        // Second split: Top section (connection + parameters) and Table
+        JSplitPane middleSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplitPane, bottomContainer);
+        middleSplitPane.setResizeWeight(0.5);
+        middleSplitPane.setDividerSize(5);
+        middleSplitPane.setOneTouchExpandable(true);
+        middleSplitPane.setContinuousLayout(true);
+        SwingUtilities.invokeLater(() -> middleSplitPane.setDividerLocation(0.65));
+        
+        // Third split: Everything above and Log
+        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, middleSplitPane, logScrollPane);
+        mainSplitPane.setResizeWeight(0.6);
         mainSplitPane.setDividerSize(5);
         mainSplitPane.setOneTouchExpandable(true);
         mainSplitPane.setContinuousLayout(true);
-        SwingUtilities.invokeLater(() -> mainSplitPane.setDividerLocation(0.65));
+        SwingUtilities.invokeLater(() -> mainSplitPane.setDividerLocation(0.6));
 
         add(mainSplitPane, BorderLayout.CENTER);
     }
