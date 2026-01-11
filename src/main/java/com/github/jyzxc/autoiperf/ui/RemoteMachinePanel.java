@@ -3,6 +3,7 @@ package com.github.jyzxc.autoiperf.ui;
 import com.github.jyzxc.autoiperf.model.SshProfile;
 import com.github.jyzxc.autoiperf.service.EnvironmentService;
 import com.github.jyzxc.autoiperf.service.NetworkService;
+import com.github.jyzxc.autoiperf.service.NicNameService;
 import com.github.jyzxc.autoiperf.service.ProfileService;
 import com.github.jyzxc.autoiperf.sshtool.SshService;
 import lombok.Getter;
@@ -12,6 +13,10 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -29,6 +34,7 @@ public class RemoteMachinePanel extends JPanel {
     private final ProfileService profileService;
     private final NetworkService networkService;
     private final EnvironmentService environmentService;
+    private final NicNameService nicNameService;
 
     // UI Components
     private JComboBox<Object> profileComboBox;
@@ -50,6 +56,7 @@ public class RemoteMachinePanel extends JPanel {
         this.profileService = new ProfileService();
         this.networkService = new NetworkService(sshService);
         this.environmentService = new EnvironmentService(sshService);
+        this.nicNameService = new NicNameService();
 
         setBorder(new TitledBorder(title));
         setLayout(new GridBagLayout());
@@ -60,7 +67,14 @@ public class RemoteMachinePanel extends JPanel {
 
     // Getters for controller to access services and state
     public boolean isConnected() { return isConnected; }
-    public String getSelectedNicIp() { return (String) nicComboBox.getSelectedItem(); }
+    public String getSelectedNicIp() {
+        Object selected = nicComboBox.getSelectedItem();
+        if (selected == null) {
+            return null;
+        }
+        // Extract IP from display text (which may include custom name)
+        return nicNameService.extractIp(selected.toString());
+    }
     public NetworkService getNetworkService() { return networkService; }
 
     public void addConnectionStateListener(Consumer<Boolean> listener) {
@@ -112,7 +126,121 @@ public class RemoteMachinePanel extends JPanel {
         gbc.gridx = 1; gbc.gridy = 5; gbc.gridwidth = 2;
         nicComboBox = new JComboBox<>(new String[]{"待连接..."});
         nicComboBox.setEnabled(false);
+        
+        // Add right-click context menu for renaming NICs
+        setupNicComboBoxContextMenu();
+        
         add(nicComboBox, gbc);
+    }
+    
+    /**
+     * Setup right-click context menu for NIC combo box to allow renaming.
+     */
+    private void setupNicComboBoxContextMenu() {
+        JPopupMenu popupMenu = new JPopupMenu();
+        JMenuItem renameItem = new JMenuItem("重命名网卡");
+        renameItem.addActionListener(e -> handleRenameNic());
+        popupMenu.add(renameItem);
+        
+        nicComboBox.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e) && nicComboBox.isEnabled()) {
+                    int index = nicComboBox.getSelectedIndex();
+                    if (index >= 0) {
+                        Object selected = nicComboBox.getSelectedItem();
+                        if (selected != null && !selected.toString().equals("待连接...") 
+                            && !selected.toString().equals("未找到可用IP") 
+                            && !selected.toString().equals("连接失败")) {
+                            popupMenu.show(nicComboBox, e.getX(), e.getY());
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    /**
+     * Handle renaming a NIC IP address.
+     */
+    private void handleRenameNic() {
+        Object selected = nicComboBox.getSelectedItem();
+        if (selected == null) {
+            return;
+        }
+        
+        String displayText = selected.toString();
+        String ip = nicNameService.extractIp(displayText);
+        if (ip == null) {
+            return;
+        }
+        
+        String currentName = nicNameService.getNicName(ip);
+        String message = String.format("请输入网卡名称（留空则删除名称）:\nIP地址: %s", ip);
+        String initialValue = currentName != null ? currentName : "";
+        
+        // Use JOptionPane with initial value
+        JTextField textField = new JTextField(initialValue);
+        Object[] messageArray = {message, textField};
+        int option = JOptionPane.showConfirmDialog(
+            this,
+            messageArray,
+            "重命名网卡",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE
+        );
+        
+        if (option == JOptionPane.OK_OPTION) {
+            String input = textField.getText();
+            // Set the name (empty string removes it)
+            nicNameService.setNicName(ip, input.trim());
+            
+            // Refresh the combo box to show updated name
+            refreshNicComboBox();
+            
+            log.info("Renamed NIC {} to '{}'", ip, input.trim().isEmpty() ? "(removed)" : input.trim());
+        }
+    }
+    
+    /**
+     * Refresh the NIC combo box with updated names.
+     */
+    private void refreshNicComboBox() {
+        if (!isConnected) {
+            return;
+        }
+        
+        Object currentSelection = nicComboBox.getSelectedItem();
+        String currentIp = currentSelection != null ? nicNameService.extractIp(currentSelection.toString()) : null;
+        
+        // Get all IPs from the combo box
+        List<String> ips = new ArrayList<>();
+        for (int i = 0; i < nicComboBox.getItemCount(); i++) {
+            Object item = nicComboBox.getItemAt(i);
+            if (item != null) {
+                String ip = nicNameService.extractIp(item.toString());
+                if (ip != null && !ip.equals("待连接...") && !ip.equals("未找到可用IP") && !ip.equals("连接失败")) {
+                    ips.add(ip);
+                }
+            }
+        }
+        
+        // Rebuild combo box with formatted names
+        nicComboBox.removeAllItems();
+        for (String ip : ips) {
+            nicComboBox.addItem(nicNameService.formatIpWithName(ip));
+        }
+        
+        // Restore selection if possible
+        if (currentIp != null) {
+            for (int i = 0; i < nicComboBox.getItemCount(); i++) {
+                Object item = nicComboBox.getItemAt(i);
+                if (item != null && currentIp.equals(nicNameService.extractIp(item.toString()))) {
+                    nicComboBox.setSelectedIndex(i);
+                    break;
+                }
+            }
+        }
     }
 
     private void addListeners() {
@@ -210,7 +338,12 @@ public class RemoteMachinePanel extends JPanel {
                     }
 
                     nicComboBox.removeAllItems();
-                    if (ips.isEmpty()) { nicComboBox.addItem("未找到可用IP"); } else { ips.forEach(nicComboBox::addItem); }
+                    if (ips.isEmpty()) { 
+                        nicComboBox.addItem("未找到可用IP"); 
+                    } else { 
+                        // Add IPs with custom names if available
+                        ips.forEach(ip -> nicComboBox.addItem(nicNameService.formatIpWithName(ip)));
+                    }
                     nicComboBox.setEnabled(true);
                     setInputsEnabled(false);
                 } catch (Exception e) {
