@@ -238,9 +238,10 @@ public class FileManagementService {
 
         if (tailContent != null && !tailContent.trim().isEmpty()) {
             try {
-                // Use multiline mode and DOTALL to match across lines
+                // Use DOTALL mode to match across lines (JSON may be formatted with newlines)
                 // Extract sum_sent.bits_per_second
-                Pattern sumSentPattern = Pattern.compile("\"sum_sent\"\\s*:\\s*\\{[^}]*?\"bits_per_second\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                // Pattern matches: "sum_sent": { ... "bits_per_second": 123.456 ... }
+                Pattern sumSentPattern = Pattern.compile("\"sum_sent\"\\s*:\\s*\\{[\\s\\S]*?\"bits_per_second\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
                 Matcher sumSentMatcher = sumSentPattern.matcher(tailContent);
                 if (sumSentMatcher.find()) {
                     try {
@@ -251,7 +252,7 @@ public class FileManagementService {
                 }
 
                 // Extract sum_received.bits_per_second
-                Pattern sumReceivedPattern = Pattern.compile("\"sum_received\"\\s*:\\s*\\{[^}]*?\"bits_per_second\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                Pattern sumReceivedPattern = Pattern.compile("\"sum_received\"\\s*:\\s*\\{[\\s\\S]*?\"bits_per_second\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
                 Matcher sumReceivedMatcher = sumReceivedPattern.matcher(tailContent);
                 if (sumReceivedMatcher.find()) {
                     try {
@@ -262,7 +263,8 @@ public class FileManagementService {
                 }
 
                 // Extract cpu_utilization_percent.host_total
-                Pattern hostTotalPattern = Pattern.compile("\"cpu_utilization_percent\"\\s*:\\s*\\{[^}]*?\"host_total\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                // Pattern matches: "cpu_utilization_percent": { ... "host_total": 72.03 ... }
+                Pattern hostTotalPattern = Pattern.compile("\"cpu_utilization_percent\"\\s*:\\s*\\{[\\s\\S]*?\"host_total\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
                 Matcher hostTotalMatcher = hostTotalPattern.matcher(tailContent);
                 if (hostTotalMatcher.find()) {
                     try {
@@ -273,7 +275,7 @@ public class FileManagementService {
                 }
 
                 // Extract cpu_utilization_percent.remote_total
-                Pattern remoteTotalPattern = Pattern.compile("\"cpu_utilization_percent\"\\s*:\\s*\\{[^}]*?\"remote_total\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                Pattern remoteTotalPattern = Pattern.compile("\"cpu_utilization_percent\"\\s*:\\s*\\{[\\s\\S]*?\"remote_total\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
                 Matcher remoteTotalMatcher = remoteTotalPattern.matcher(tailContent);
                 if (remoteTotalMatcher.find()) {
                     try {

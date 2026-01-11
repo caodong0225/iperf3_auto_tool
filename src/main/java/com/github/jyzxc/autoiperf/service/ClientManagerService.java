@@ -48,7 +48,7 @@ public class ClientManagerService {
         if (config.getPacketLength() != null) {
             packetLengthSuffix = "_l" + config.getPacketLength();
         }
-        String remoteJsonFile = String.format("/tmp/iperf3/test_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
+        String remoteJsonFile = String.format("/tmp/iperf3/send_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
         String sendJsonFile = String.format("/tmp/iperf3/send_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
         String receiveJsonFile = String.format("/tmp/iperf3/receive_%s%s_%s.json", timestamp, packetLengthSuffix, testId.substring(0, 8));
 

@@ -18,6 +18,7 @@ logs/
 
 # Application-generated files
 profiles.json
+nic_names.json
 test_results/
 
 demo
