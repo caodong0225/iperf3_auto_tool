@@ -30,6 +30,10 @@ public class FileManagementService {
         private String clientIp; // Only for client files
         private String timestamp;
         private long fileSize;
+        private Double sendRate; // bits_per_second from sum_sent
+        private Double receiveRate; // bits_per_second from sum_received
+        private Double sendCpu; // host_total from cpu_utilization_percent
+        private Double receiveCpu; // remote_total from cpu_utilization_percent
 
         // Getters and setters
         public String getFilename() { return filename; }
@@ -52,6 +56,14 @@ public class FileManagementService {
         public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
         public long getFileSize() { return fileSize; }
         public void setFileSize(long fileSize) { this.fileSize = fileSize; }
+        public Double getSendRate() { return sendRate; }
+        public void setSendRate(Double sendRate) { this.sendRate = sendRate; }
+        public Double getReceiveRate() { return receiveRate; }
+        public void setReceiveRate(Double receiveRate) { this.receiveRate = receiveRate; }
+        public Double getSendCpu() { return sendCpu; }
+        public void setSendCpu(Double sendCpu) { this.sendCpu = sendCpu; }
+        public Double getReceiveCpu() { return receiveCpu; }
+        public void setReceiveCpu(Double receiveCpu) { this.receiveCpu = receiveCpu; }
     }
 
     /**
@@ -168,8 +180,7 @@ public class FileManagementService {
             }
         }
 
-        // Only read first 2KB of file to extract metadata (to avoid loading large files)
-        // Use head command to read only the beginning
+        // Read first 2KB for basic metadata (remote_host, remote_port, local_host)
         String headCommand = "head -c 2048 " + filePath + " 2>/dev/null";
         String jsonContent = null;
         try {
@@ -180,42 +191,100 @@ public class FileManagementService {
             return fileInfo;
         }
 
-        if (jsonContent == null || jsonContent.trim().isEmpty()) {
-            // Empty file, still return info
-            return fileInfo;
+        if (jsonContent != null && !jsonContent.trim().isEmpty()) {
+            // Parse JSON content (only first part) using regex for faster extraction
+            try {
+                // Extract key information using regex (faster than full JSON parse)
+                // Extract remote_host and remote_port from JSON
+                Pattern remoteHostPattern = Pattern.compile("\"remote_host\"\\s*:\\s*\"([^\"]+)\"");
+                Pattern remotePortPattern = Pattern.compile("\"remote_port\"\\s*:\\s*(\\d+)");
+                Pattern localHostPattern = Pattern.compile("\"local_host\"\\s*:\\s*\"([^\"]+)\"");
+                
+                Matcher remoteHostMatcher = remoteHostPattern.matcher(jsonContent);
+                if (remoteHostMatcher.find()) {
+                    fileInfo.setServerIp(remoteHostMatcher.group(1));
+                }
+                
+                Matcher remotePortMatcher = remotePortPattern.matcher(jsonContent);
+                if (remotePortMatcher.find()) {
+                    try {
+                        fileInfo.setPort(Integer.parseInt(remotePortMatcher.group(1)));
+                    } catch (NumberFormatException e) {
+                        // Ignore
+                    }
+                }
+                
+                // For client files, extract local_host as client IP
+                if ("client".equals(fileInfo.getType())) {
+                    Matcher localHostMatcher = localHostPattern.matcher(jsonContent);
+                    if (localHostMatcher.find()) {
+                        fileInfo.setClientIp(localHostMatcher.group(1));
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Failed to parse JSON content for file {}: {}", filename, e.getMessage());
+            }
         }
 
-        // Parse JSON content (only first part) using regex for faster extraction
+        // Read last 55 lines of file to extract performance metrics (sum_sent, sum_received, cpu_utilization_percent)
+        String tailCommand = "tail -n 55 " + filePath + " 2>/dev/null";
+        String tailContent = null;
         try {
-            // Extract key information using regex (faster than full JSON parse)
-            // Extract remote_host and remote_port from JSON
-            Pattern remoteHostPattern = Pattern.compile("\"remote_host\"\\s*:\\s*\"([^\"]+)\"");
-            Pattern remotePortPattern = Pattern.compile("\"remote_port\"\\s*:\\s*(\\d+)");
-            Pattern localHostPattern = Pattern.compile("\"local_host\"\\s*:\\s*\"([^\"]+)\"");
-            
-            Matcher remoteHostMatcher = remoteHostPattern.matcher(jsonContent);
-            if (remoteHostMatcher.find()) {
-                fileInfo.setServerIp(remoteHostMatcher.group(1));
-            }
-            
-            Matcher remotePortMatcher = remotePortPattern.matcher(jsonContent);
-            if (remotePortMatcher.find()) {
-                try {
-                    fileInfo.setPort(Integer.parseInt(remotePortMatcher.group(1)));
-                } catch (NumberFormatException e) {
-                    // Ignore
-                }
-            }
-            
-            // For client files, extract local_host as client IP
-            if ("client".equals(fileInfo.getType())) {
-                Matcher localHostMatcher = localHostPattern.matcher(jsonContent);
-                if (localHostMatcher.find()) {
-                    fileInfo.setClientIp(localHostMatcher.group(1));
-                }
-            }
+            tailContent = sshService.executeCommand(tailCommand, 3000);
         } catch (Exception e) {
-            log.debug("Failed to parse JSON content for file {}: {}", filename, e.getMessage());
+            log.debug("Failed to read file tail for {}: {}", filename, e.getMessage());
+            // Continue without tail content
+        }
+
+        if (tailContent != null && !tailContent.trim().isEmpty()) {
+            try {
+                // Use multiline mode and DOTALL to match across lines
+                // Extract sum_sent.bits_per_second
+                Pattern sumSentPattern = Pattern.compile("\"sum_sent\"\\s*:\\s*\\{[^}]*?\"bits_per_second\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                Matcher sumSentMatcher = sumSentPattern.matcher(tailContent);
+                if (sumSentMatcher.find()) {
+                    try {
+                        fileInfo.setSendRate(Double.parseDouble(sumSentMatcher.group(1)));
+                    } catch (NumberFormatException e) {
+                        log.debug("Failed to parse sendRate: {}", e.getMessage());
+                    }
+                }
+
+                // Extract sum_received.bits_per_second
+                Pattern sumReceivedPattern = Pattern.compile("\"sum_received\"\\s*:\\s*\\{[^}]*?\"bits_per_second\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                Matcher sumReceivedMatcher = sumReceivedPattern.matcher(tailContent);
+                if (sumReceivedMatcher.find()) {
+                    try {
+                        fileInfo.setReceiveRate(Double.parseDouble(sumReceivedMatcher.group(1)));
+                    } catch (NumberFormatException e) {
+                        log.debug("Failed to parse receiveRate: {}", e.getMessage());
+                    }
+                }
+
+                // Extract cpu_utilization_percent.host_total
+                Pattern hostTotalPattern = Pattern.compile("\"cpu_utilization_percent\"\\s*:\\s*\\{[^}]*?\"host_total\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                Matcher hostTotalMatcher = hostTotalPattern.matcher(tailContent);
+                if (hostTotalMatcher.find()) {
+                    try {
+                        fileInfo.setSendCpu(Double.parseDouble(hostTotalMatcher.group(1)));
+                    } catch (NumberFormatException e) {
+                        log.debug("Failed to parse sendCpu: {}", e.getMessage());
+                    }
+                }
+
+                // Extract cpu_utilization_percent.remote_total
+                Pattern remoteTotalPattern = Pattern.compile("\"cpu_utilization_percent\"\\s*:\\s*\\{[^}]*?\"remote_total\"\\s*:\\s*([0-9.]+)", Pattern.DOTALL);
+                Matcher remoteTotalMatcher = remoteTotalPattern.matcher(tailContent);
+                if (remoteTotalMatcher.find()) {
+                    try {
+                        fileInfo.setReceiveCpu(Double.parseDouble(remoteTotalMatcher.group(1)));
+                    } catch (NumberFormatException e) {
+                        log.debug("Failed to parse receiveCpu: {}", e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Failed to parse tail JSON content for file {}: {}", filename, e.getMessage());
+            }
         }
 
         // Try to extract PID from filename or process

@@ -129,7 +129,7 @@ public class FileManagementController {
         DefaultTableModel model = (DefaultTableModel) view.getServerFilesTable().getModel();
         model.setRowCount(0);
 
-        // PID and Type columns removed as requested - now only 6 columns: 文件名, 服务器IP, 端口, 客户端IP, 文件大小, 时间戳
+        // Columns: 文件名, 服务器IP, 端口, 客户端IP, 文件大小, 时间戳, 发送速率, 接收速率, 发送CPU, 接收CPU
         for (FileManagementService.JsonFileInfo file : files) {
             model.addRow(new Object[]{
                     file.getFilename(),
@@ -137,10 +137,36 @@ public class FileManagementController {
                     file.getPort() > 0 ? file.getPort() : "N/A",
                     file.getClientIp() != null ? file.getClientIp() : "N/A",
                     formatFileSize(file.getFileSize()),
-                    file.getTimestamp() != null ? file.getTimestamp() : "N/A"
+                    file.getTimestamp() != null ? file.getTimestamp() : "N/A",
+                    formatRate(file.getSendRate()),
+                    formatRate(file.getReceiveRate()),
+                    formatCpu(file.getSendCpu()),
+                    formatCpu(file.getReceiveCpu())
             });
         }
-        log.info("Updated server files table with {} files (PID and Type columns removed)", files.size());
+        log.info("Updated server files table with {} files", files.size());
+    }
+
+    private String formatRate(Double rate) {
+        if (rate == null) {
+            return "N/A";
+        }
+        if (rate >= 1_000_000_000) {
+            return String.format("%.2f Gbps", rate / 1_000_000_000.0);
+        } else if (rate >= 1_000_000) {
+            return String.format("%.2f Mbps", rate / 1_000_000.0);
+        } else if (rate >= 1_000) {
+            return String.format("%.2f Kbps", rate / 1_000.0);
+        } else {
+            return String.format("%.2f bps", rate);
+        }
+    }
+
+    private String formatCpu(Double cpu) {
+        if (cpu == null) {
+            return "N/A";
+        }
+        return String.format("%.2f%%", cpu);
     }
 
     private String formatFileSize(long bytes) {

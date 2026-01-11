@@ -27,7 +27,8 @@ public class FileManagementPanel extends JPanel {
 
         // Server files table (shows all json files under /tmp/iperf3 on the server host)
         // PID and Type columns removed as requested
-        String[] serverColumnNames = {"文件名", "服务器IP", "端口", "客户端IP", "文件大小", "时间戳"};
+        // Added: 发送速率, 接收速率, 发送CPU, 接收CPU
+        String[] serverColumnNames = {"文件名", "服务器IP", "端口", "客户端IP", "文件大小", "时间戳", "发送速率(bps)", "接收速率(bps)", "发送CPU(%)", "接收CPU(%)"};
         DefaultTableModel serverTableModel = new DefaultTableModel(serverColumnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -49,6 +50,10 @@ public class FileManagementPanel extends JPanel {
         serverFilesTable.getColumnModel().getColumn(3).setPreferredWidth(120);  // 客户端IP
         serverFilesTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // 文件大小
         serverFilesTable.getColumnModel().getColumn(5).setPreferredWidth(150);  // 时间戳
+        serverFilesTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // 发送速率
+        serverFilesTable.getColumnModel().getColumn(7).setPreferredWidth(120);  // 接收速率
+        serverFilesTable.getColumnModel().getColumn(8).setPreferredWidth(100);  // 发送CPU
+        serverFilesTable.getColumnModel().getColumn(9).setPreferredWidth(100);  // 接收CPU
         
         JScrollPane serverTableScrollPane = new JScrollPane(serverFilesTable);
         serverTableScrollPane.setBorder(new TitledBorder("服务端 /tmp/iperf3 JSON 文件"));
