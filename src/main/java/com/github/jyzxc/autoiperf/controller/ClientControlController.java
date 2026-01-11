@@ -402,7 +402,34 @@ public class ClientControlController {
     }
 
     private void addInstanceToTable(ClientTestInstance instance) {
+        Integer pid = instance.getPid();
+        if (pid == null) {
+            log.warn("Cannot add instance with null PID");
+            return;
+        }
+        
+        // Check if this PID already exists in the table or currentInstances map
+        if (currentInstances.containsKey(pid)) {
+            log.debug("Instance with PID {} already exists in currentInstances, skipping add", pid);
+            // Update the existing instance instead
+            updateInstanceStatus(instance);
+            return;
+        }
+        
         DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
+        
+        // Double-check in the table model itself (in case currentInstances is out of sync)
+        for (int i = 0; i < model.getRowCount(); i++) {
+            Integer rowPid = (Integer) model.getValueAt(i, 0);
+            if (rowPid != null && rowPid.equals(pid)) {
+                log.warn("Instance with PID {} already exists in table at row {}, skipping add", pid, i);
+                // Update the existing instance instead
+                updateInstanceStatus(instance);
+                return;
+            }
+        }
+        
+        // PID doesn't exist, safe to add
         Object[] rowData = new Object[]{
                 instance.getPid(),
                 instance.getStatus() != null ? instance.getStatus().toString() : "UNKNOWN",
@@ -499,17 +526,27 @@ public class ClientControlController {
     
     /**
      * Remove an instance from the table by PID.
+     * Removes all occurrences of the PID (in case of duplicates).
      */
     private void removeInstanceFromTable(int pid) {
         DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
-        for (int i = 0; i < model.getRowCount(); i++) {
+        // Remove from the end to avoid index shifting issues
+        List<Integer> rowsToRemove = new ArrayList<>();
+        for (int i = model.getRowCount() - 1; i >= 0; i--) {
             Integer rowPid = (Integer) model.getValueAt(i, 0);
-            if (rowPid != null && rowPid == pid) {
-                model.removeRow(i);
-                currentInstances.remove(pid);
-                log.debug("Removed row {} for PID {}", i, pid);
-                return;
+            if (rowPid != null && rowPid.equals(pid)) {
+                rowsToRemove.add(i);
             }
+        }
+        // Remove all found rows
+        for (Integer rowIndex : rowsToRemove) {
+            model.removeRow(rowIndex);
+            log.debug("Removed row {} for PID {}", rowIndex, pid);
+        }
+        // Remove from currentInstances map
+        currentInstances.remove(pid);
+        if (rowsToRemove.size() > 1) {
+            log.warn("Removed {} duplicate rows for PID {}", rowsToRemove.size(), pid);
         }
     }
     
@@ -517,17 +554,37 @@ public class ClientControlController {
      * Update the status of an existing instance in the table.
      */
     private void updateInstanceStatus(ClientTestInstance instance) {
+        Integer pid = instance.getPid();
+        if (pid == null) {
+            log.warn("Cannot update instance with null PID");
+            return;
+        }
+        
         DefaultTableModel model = (DefaultTableModel) view.getClientProcessesTable().getModel();
         for (int i = 0; i < model.getRowCount(); i++) {
             Integer rowPid = (Integer) model.getValueAt(i, 0);
-            if (rowPid != null && rowPid == instance.getPid()) {
+            if (rowPid != null && rowPid.equals(pid)) {
                 // Update status column (index 1)
-                model.setValueAt(instance.getStatus().toString(), i, 1);
+                if (instance.getStatus() != null) {
+                    model.setValueAt(instance.getStatus().toString(), i, 1);
+                }
+                // Update other columns if they changed
+                if (instance.getTargetHost() != null) {
+                    model.setValueAt(instance.getTargetHost(), i, 2);
+                }
+                if (instance.getTargetPort() > 0) {
+                    model.setValueAt(instance.getTargetPort(), i, 3);
+                }
+                if (instance.getCommandLine() != null) {
+                    model.setValueAt(instance.getCommandLine(), i, 4);
+                }
                 // Update currentInstances map
                 currentInstances.put(instance.getPid(), instance);
+                log.debug("Updated instance in table: PID={}, row={}", pid, i);
                 return;
             }
         }
+        log.warn("Instance with PID {} not found in table for update", pid);
     }
 
     private void clearTestTable() {
