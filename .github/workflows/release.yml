@@ -54,32 +54,74 @@ jobs:
         } > release_notes.md
         
         if [ -z "$PREV_TAG" ]; then
-          # First release - show all commits
+          # First release - show all commits grouped by type
           echo "### Initial Release" >> release_notes.md
           echo "" >> release_notes.md
-          git log --pretty=format:"- **%s**%n  - Commit: \`%h\`" --reverse >> release_notes.md
+          
+          # Features
+          FEATURES=$(git log --pretty=format:"- %s (\`%h\`)" --grep="^feat" --reverse 2>/dev/null)
+          if [ -n "$FEATURES" ]; then
+            echo "#### ✨ Features" >> release_notes.md
+            echo "$FEATURES" >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+          
+          # Fixes
+          FIXES=$(git log --pretty=format:"- %s (\`%h\`)" --grep="^fix" --reverse 2>/dev/null)
+          if [ -n "$FIXES" ]; then
+            echo "#### 🐛 Bug Fixes" >> release_notes.md
+            echo "$FIXES" >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+          
+          # Other changes
+          OTHERS=$(git log --pretty=format:"- %s (\`%h\`)" --grep="^refactor\|^chore\|^perf\|^style\|^docs" --reverse 2>/dev/null)
+          if [ -n "$OTHERS" ]; then
+            echo "#### 🔧 Improvements" >> release_notes.md
+            echo "$OTHERS" >> release_notes.md
+            echo "" >> release_notes.md
+          fi
         else
           # Subsequent releases - categorize commits
-          echo "### Major Features" >> release_notes.md
+          echo "### ✨ Major Features" >> release_notes.md
           echo "" >> release_notes.md
-          git log ${PREV_TAG}..HEAD --pretty=format:"- **%s**%n  - Commit: \`%h\`" --grep="^feat" --reverse >> release_notes.md 2>/dev/null || echo "- No major features" >> release_notes.md
+          FEATURES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (\`%h\`)" --grep="^feat" --reverse 2>/dev/null)
+          if [ -n "$FEATURES" ]; then
+            echo "$FEATURES" >> release_notes.md
+          else
+            echo "- No major features in this release" >> release_notes.md
+          fi
           
           echo "" >> release_notes.md
-          echo "### Bug Fixes" >> release_notes.md
+          echo "### 🐛 Bug Fixes" >> release_notes.md
           echo "" >> release_notes.md
-          git log ${PREV_TAG}..HEAD --pretty=format:"- **%s**%n  - Commit: \`%h\`" --grep="^fix" --reverse >> release_notes.md 2>/dev/null || echo "- No bug fixes" >> release_notes.md
+          FIXES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (\`%h\`)" --grep="^fix" --reverse 2>/dev/null)
+          if [ -n "$FIXES" ]; then
+            echo "$FIXES" >> release_notes.md
+          else
+            echo "- No bug fixes in this release" >> release_notes.md
+          fi
           
           echo "" >> release_notes.md
-          echo "### Improvements" >> release_notes.md
+          echo "### 🔧 Improvements" >> release_notes.md
           echo "" >> release_notes.md
-          git log ${PREV_TAG}..HEAD --pretty=format:"- **%s**%n  - Commit: \`%h\`" --grep="^refactor\|^chore\|^perf\|^style" --reverse >> release_notes.md 2>/dev/null || echo "- No improvements" >> release_notes.md
+          OTHERS=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (\`%h\`)" --grep="^refactor\|^chore\|^perf\|^style\|^docs" --reverse 2>/dev/null)
+          if [ -n "$OTHERS" ]; then
+            echo "$OTHERS" >> release_notes.md
+          else
+            echo "- No improvements in this release" >> release_notes.md
+          fi
         fi
         
         {
           echo ""
           echo "## 📋 Full Changelog"
           echo ""
-          echo "See [full commit history](https://github.com/${{ github.repository }}/compare/${PREV_TAG:-HEAD}...${TAG})"
+          if [ -z "$PREV_TAG" ]; then
+            echo "See [full commit history](https://github.com/${{ github.repository }}/commits/${TAG})"
+          else
+            echo "See [full commit history](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG})"
+          fi
           echo ""
           echo "---"
           echo ""
