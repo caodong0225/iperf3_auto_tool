@@ -21,4 +21,7 @@ profiles.json
 nic_names.json
 test_results/
 
+# GitHub Actions
+.github/workflows/*.log
+
 demo
